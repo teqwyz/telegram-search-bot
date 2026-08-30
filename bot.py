@@ -233,8 +233,8 @@ async def start(
 ):
 
     await update.message.reply_text(
-        "👋 Привет!\n\n"
-        "Я поисковый бот.\n"
+        "Ку!\n\n"
+        "Если кратко, то я умею искать музыку, видео и брать инфу из интернета.\n"
         "Выбери режим поиска:",
         reply_markup=menu_buttons()
     )
