@@ -23,10 +23,6 @@ from telegram.ext import (
 )
 
 
-# =========================
-# CONFIG
-# =========================
-
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 
 PORT = int(
@@ -39,16 +35,12 @@ PORT = int(
 OWNER = "@teqwyz"
 
 
-# =========================
-# FLASK FOR RENDER
-# =========================
-
 app = Flask(__name__)
 
 
 @app.route("/")
-def index():
-    return "Bot is running!"
+def home():
+    return "Telegram Search Bot is running!"
 
 
 
@@ -61,24 +53,24 @@ def run_flask():
 
 
 
-# =========================
-# SEARCH
-# =========================
+# ======================
+# ПОИСК WEB
+# ======================
 
-def search_web(query):
+def web_search(text):
 
     try:
 
         r = requests.get(
-            "https://html.duckduckgo.com/html/",
+            "https://www.bing.com/search",
             params={
-                "q": query
+                "q": text
             },
             headers={
                 "User-Agent":
                 "Mozilla/5.0"
             },
-            timeout=10
+            timeout=15
         )
 
 
@@ -88,35 +80,39 @@ def search_web(query):
         )
 
 
-        results = []
+        result = []
 
 
         for item in soup.select(
-            ".result"
+            ".b_algo"
         ):
 
-            a = item.select_one(
-                ".result__a"
+            title = item.select_one(
+                "h2"
+            )
+
+            link = item.select_one(
+                "a"
             )
 
 
-            if a:
+            if title and link:
 
-                results.append(
+                result.append(
                     (
-                        a.text.strip(),
-                        a.get("href")
+                        title.text,
+                        link["href"]
                     )
                 )
 
 
-        return results[:5]
+        return result[:5]
 
 
     except Exception as e:
 
         print(
-            "SEARCH ERROR:",
+            "WEB ERROR:",
             e
         )
 
@@ -124,11 +120,11 @@ def search_web(query):
 
 
 
-# =========================
-# LINKS
-# =========================
+# ======================
+# ССЫЛКИ
+# ======================
 
-def encode(text):
+def q(text):
 
     return requests.utils.quote(
         text
@@ -136,9 +132,9 @@ def encode(text):
 
 
 
-def music_buttons(query):
+def music_menu(text):
 
-    q = encode(query)
+    x = q(text)
 
     return InlineKeyboardMarkup(
         [
@@ -146,21 +142,21 @@ def music_buttons(query):
             [
                 InlineKeyboardButton(
                     "🎵 Spotify",
-                    url=f"https://open.spotify.com/search/{q}"
+                    url=f"https://open.spotify.com/search/{x}"
                 )
             ],
 
             [
                 InlineKeyboardButton(
                     "🎵 Яндекс Музыка",
-                    url=f"https://music.yandex.ru/search?text={q}"
+                    url=f"https://music.yandex.ru/search?text={x}"
                 )
             ],
 
             [
                 InlineKeyboardButton(
                     "🎵 VK Музыка",
-                    url=f"https://vk.ru/audios866956338"
+                    url=f"https://vk.com/search?section=audio&q={x}"
                 )
             ]
 
@@ -169,9 +165,9 @@ def music_buttons(query):
 
 
 
-def video_buttons(query):
+def video_menu(text):
 
-    q = encode(query)
+    x = q(text)
 
     return InlineKeyboardMarkup(
         [
@@ -179,7 +175,7 @@ def video_buttons(query):
             [
                 InlineKeyboardButton(
                     "▶ YouTube",
-                    url=f"https://youtube.com/results?search_query={q}"
+                    url=f"https://youtube.com/results?search_query={x}"
                 )
             ]
 
@@ -188,15 +184,125 @@ def video_buttons(query):
 
 
 
-def menu_buttons():
+def other_menu(text, mode):
+
+    x = q(text)
+
+
+    links = {
+
+        "news":
+        [
+            (
+                "📰 Google Новости",
+                f"https://news.google.com/search?q={x}"
+            )
+        ],
+
+        "wiki":
+        [
+            (
+                "📚 Википедия",
+                f"https://ru.wikipedia.org/wiki/{x}"
+            )
+        ],
+
+        "shop":
+        [
+            (
+                "🛒 Яндекс Маркет",
+                f"https://market.yandex.ru/search?text={x}"
+            ),
+            (
+                "🛒 Ozon",
+                f"https://www.ozon.ru/search/?text={x}"
+            )
+        ],
+
+        "maps":
+        [
+            (
+                "🗺 Google Maps",
+                f"https://www.google.com/maps/search/{x}"
+            ),
+            (
+                "🗺 Яндекс Карты",
+                f"https://yandex.ru/maps/?text={x}"
+            )
+        ]
+
+    }
+
+
+    buttons = []
+
+
+    for name, url in links.get(
+        mode,
+        []
+    ):
+
+        buttons.append(
+            [
+                InlineKeyboardButton(
+                    name,
+                    url=url
+                )
+            ]
+        )
+
+
+    return InlineKeyboardMarkup(
+        buttons
+    )
+
+
+
+# ======================
+# TELEGRAM
+# ======================
+
+modes = {}
+
+
+
+def main_menu():
 
     return InlineKeyboardMarkup(
         [
 
             [
                 InlineKeyboardButton(
-                    "🌐 Веб-поиск",
+                    "🌐 Веб",
                     callback_data="web"
+                )
+            ],
+
+            [
+                InlineKeyboardButton(
+                    "📰 Новости",
+                    callback_data="news"
+                )
+            ],
+
+            [
+                InlineKeyboardButton(
+                    "📚 Википедия",
+                    callback_data="wiki"
+                )
+            ],
+
+            [
+                InlineKeyboardButton(
+                    "🛒 Товары",
+                    callback_data="shop"
+                )
+            ],
+
+            [
+                InlineKeyboardButton(
+                    "🗺 Карты",
+                    callback_data="maps"
                 )
             ],
 
@@ -219,108 +325,63 @@ def menu_buttons():
 
 
 
-# =========================
-# TELEGRAM
-# =========================
-
-user_mode = {}
-
-
-
 async def start(
-        update: Update,
-        context: ContextTypes.DEFAULT_TYPE
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
 ):
 
     await update.message.reply_text(
-        "Ку!\n\n"
-        "Если кратко, то я умею искать музыку, видео и брать инфу из интернета.\n"
-        "Выбери режим поиска:",
-        reply_markup=menu_buttons()
+        "👋 Привет!\n\n"
+        "Выбери тип поиска:",
+        reply_markup=main_menu()
     )
 
 
 
-async def creator(
-        update,
-        context
+async def buttons(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
 ):
 
-    await update.message.reply_text(
-        f"🤖 Меня создал {OWNER}"
-    )
+    call = update.callback_query
+
+    await call.answer()
 
 
-
-async def button(
-        update: Update,
-        context: ContextTypes.DEFAULT_TYPE
-):
-
-    query = update.callback_query
-
-    await query.answer()
+    modes[
+        call.from_user.id
+    ] = call.data
 
 
-    user_mode[
-        query.from_user.id
-    ] = query.data
-
-
-    names = {
-
-        "web":
-        "🌐 Веб-поиск",
-
-        "music":
-        "🎵 Музыка",
-
-        "video":
-        "🎬 Видео"
-
-    }
-
-
-    await query.edit_message_text(
-
-        "Выбран режим:\n"
-        + names.get(
-            query.data,
-            "Поиск"
-        )
-        +
-        "\n\nОтправь запрос."
-
+    await call.edit_message_text(
+        "✅ Режим выбран.\n"
+        "Отправь запрос."
     )
 
 
 
 async def message(
-        update: Update,
-        context: ContextTypes.DEFAULT_TYPE
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
 ):
 
-    text = update.message.text.strip()
+    text = update.message.text
 
 
     if (
         "кто тебя создал"
         in text.lower()
-        or
-        "кто твой создатель"
-        in text.lower()
     ):
 
-        await creator(
-            update,
-            context
+        await update.message.reply_text(
+            f"🤖 Меня создал {OWNER}"
         )
 
         return
 
 
 
-    mode = user_mode.get(
+    mode = modes.get(
         update.message.from_user.id,
         "web"
     )
@@ -329,21 +390,36 @@ async def message(
     if mode == "music":
 
         await update.message.reply_text(
-            "Выбери сервис:",
-            reply_markup=
-            music_buttons(text)
+            "Музыка:",
+            reply_markup=music_menu(text)
         )
 
         return
-
 
 
     if mode == "video":
 
         await update.message.reply_text(
             "Видео:",
-            reply_markup=
-            video_buttons(text)
+            reply_markup=video_menu(text)
+        )
+
+        return
+
+
+    if mode in [
+        "news",
+        "wiki",
+        "shop",
+        "maps"
+    ]:
+
+        await update.message.reply_text(
+            "Результат:",
+            reply_markup=other_menu(
+                text,
+                mode
+            )
         )
 
         return
@@ -355,12 +431,12 @@ async def message(
     )
 
 
-    results = search_web(
+    result = web_search(
         text
     )
 
 
-    if not results:
+    if not result:
 
         await msg.edit_text(
             "😕 Ничего не найдено"
@@ -370,74 +446,57 @@ async def message(
 
 
 
-    answer = (
-        "🌐 <b>Результаты:</b>\n\n"
+    text_answer = (
+        "🌐 Результаты:\n\n"
     )
 
 
-    buttons = []
+    keyboard = []
 
 
     for i, item in enumerate(
-        results,
+        result,
         1
     ):
 
-        title = html.escape(
-            item[0]
+        text_answer += (
+            f"{i}. {html.escape(item[0])}\n"
         )
 
 
-        answer += (
-            f"{i}. {title}\n\n"
-        )
-
-
-        buttons.append(
+        keyboard.append(
             [
-
                 InlineKeyboardButton(
                     f"🔗 {i}",
                     url=item[1]
                 )
-
             ]
         )
 
 
     await msg.edit_text(
-
-        answer,
-
-        parse_mode="HTML",
-
+        text_answer,
         reply_markup=
         InlineKeyboardMarkup(
-            buttons
+            keyboard
         )
-
     )
 
 
 
-# =========================
-# MAIN
-# =========================
+# ======================
+# START
+# ======================
+
+def run():
+
+    threading.Thread(
+        target=run_flask,
+        daemon=True
+    ).start()
 
 
-def main():
-
-    flask_thread = threading.Thread(
-        target=run_flask
-    )
-
-    flask_thread.daemon = True
-
-    flask_thread.start()
-
-
-
-    application = (
+    bot = (
         Application
         .builder()
         .token(BOT_TOKEN)
@@ -445,7 +504,7 @@ def main():
     )
 
 
-    application.add_handler(
+    bot.add_handler(
         CommandHandler(
             "start",
             start
@@ -453,17 +512,16 @@ def main():
     )
 
 
-    application.add_handler(
+    bot.add_handler(
         CallbackQueryHandler(
-            button
+            buttons
         )
     )
 
 
-    application.add_handler(
+    bot.add_handler(
         MessageHandler(
-            filters.TEXT
-            &
+            filters.TEXT &
             ~filters.COMMAND,
             message
         )
@@ -475,10 +533,10 @@ def main():
     )
 
 
-    application.run_polling()
+    bot.run_polling()
 
 
 
 if __name__ == "__main__":
 
-    main()
+    run()
