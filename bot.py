@@ -10,14 +10,11 @@ from telegram.ext import (
     CommandHandler,
     MessageHandler,
     ContextTypes,
-    filters
+    filters,
 )
-
 
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 
-
-# Веб-сервер для Render
 web_app = Flask(__name__)
 
 
@@ -26,28 +23,38 @@ def home():
     return "Telegram Search Bot is running!"
 
 
-# Поиск через DuckDuckGo
-def search_duckduckgo(query):
+# =========================
+# ПОИСК DUCKDUCKGO
+# =========================
 
+def search_duckduckgo(query):
     url = "https://html.duckduckgo.com/html/"
 
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 "
-            "Chrome/150.0 Safari/537.36"
+            "(KHTML, like Gecko) "
+            "Chrome/131.0.0.0 Safari/537.36"
         ),
-        "Accept-Language": "ru-RU,ru;q=0.9"
+        "Accept": "text/html,application/xhtml+xml",
+        "Accept-Language": "ru-RU,ru;q=0.9,en;q=0.8",
     }
 
-    response = requests.get(
-        url,
-        params={"q": query},
-        headers=headers,
-        timeout=20
-    )
+    try:
+        response = requests.get(
+            url,
+            params={"q": query},
+            headers=headers,
+            timeout=30,
+        )
 
-    response.raise_for_status()
+        response.raise_for_status()
+
+    except requests.RequestException as error:
+        print("Ошибка подключения к DuckDuckGo:", repr(error))
+        return []
+
 
     soup = BeautifulSoup(
         response.text,
@@ -56,47 +63,56 @@ def search_duckduckgo(query):
 
     results = []
 
+
     for item in soup.select(".result"):
 
-        link = item.select_one(
-            ".result__a"
-        )
+        link = item.select_one(".result__a")
 
         if not link:
             continue
+
 
         title = link.get_text(
             " ",
             strip=True
         )
 
-        result_url = link.get(
-            "href"
-        )
+        result_url = link.get("href")
 
-        description_block = item.select_one(
+
+        description_element = item.select_one(
             ".result__snippet"
         )
 
         description = ""
 
-        if description_block:
-            description = description_block.get_text(
+        if description_element:
+            description = description_element.get_text(
                 " ",
                 strip=True
             )
 
-        results.append({
-            "title": title,
-            "url": result_url,
-            "description": description
-        })
+
+        if title and result_url:
+
+            results.append({
+                "title": title,
+                "url": result_url,
+                "description": description,
+            })
+
+
+    print(
+        f"DuckDuckGo: найдено {len(results)} результатов"
+    )
 
     return results
 
 
+# =========================
+# /START
+# =========================
 
-# Команда /start
 async def start(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
@@ -105,15 +121,18 @@ async def start(
     await update.message.reply_text(
         "👋 Привет!\n\n"
         "Я бот для поиска информации в интернете.\n\n"
-        "Отправь запрос, например:\n\n"
+        "Просто отправь мне запрос:\n\n"
         "🔎 новости технологий\n"
-        "🔎 кто такой Эйнштейн\n"
-        "🔎 дата выхода GTA 6"
+        "🔎 Кто такой Навальный\n"
+        "🔎 Дата выхода GTA 6"
+        "🔎 Кто такой Павел Дуров\n"
     )
 
 
+# =========================
+# ПОИСК
+# =========================
 
-# Обработка сообщений
 async def search(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
@@ -135,30 +154,17 @@ async def search(
         results = search_duckduckgo(query)
 
 
-        print(
-            "Запрос:",
-            query
-        )
-
-        print(
-            "Найдено:",
-            len(results)
-        )
-
-
         if not results:
 
             await message.edit_text(
-                "😕 По этому запросу ничего не найдено."
+                "😕 DuckDuckGo не вернул результаты.\n\n"
+                "Попробуй немного изменить запрос."
             )
 
             return
 
 
-
-        text = (
-            "🔎 <b>Результаты поиска</b>\n\n"
-        )
+        text = "🔎 <b>Результаты поиска</b>\n\n"
 
 
         for i, result in enumerate(
@@ -166,50 +172,69 @@ async def search(
             1
         ):
 
-            text += (
-                f"<b>{i}. "
-                f"{result['title']}</b>\n"
+            title = result["title"]
+            description = result["description"]
+            url = result["url"]
+
+
+            # Защита от символов HTML
+            title = (
+                title
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
             )
 
 
-            if result["description"]:
+            description = (
+                description
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+            )
+
+
+            text += (
+                f"<b>{i}. {title}</b>\n"
+            )
+
+
+            if description:
 
                 text += (
-                    result["description"]
-                    + "\n"
+                    f"{description}\n"
                 )
 
 
             text += (
-                f"🔗 "
-                f"<a href=\"{result['url']}\">"
-                "Открыть"
-                "</a>\n\n"
+                f'🔗 <a href="{url}">Открыть</a>\n\n'
             )
 
 
         await message.edit_text(
             text,
             parse_mode="HTML",
-            disable_web_page_preview=True
+            disable_web_page_preview=True,
         )
 
 
     except Exception as error:
 
         print(
-            "Ошибка поиска:",
+            "Ошибка обработки поиска:",
             repr(error)
         )
 
 
         await message.edit_text(
-            "❌ Ошибка при поиске."
+            "❌ При поиске произошла ошибка."
         )
 
 
+# =========================
+# FLASK
+# =========================
 
-# Запуск Flask для Render
 def run_web_server():
 
     port = int(
@@ -219,19 +244,22 @@ def run_web_server():
         )
     )
 
+
     web_app.run(
         host="0.0.0.0",
-        port=port
+        port=port,
     )
 
 
+# =========================
+# ЗАПУСК
+# =========================
 
-# Запуск бота
 def main():
 
     threading.Thread(
         target=run_web_server,
-        daemon=True
+        daemon=True,
     ).start()
 
 
@@ -259,18 +287,12 @@ def main():
     )
 
 
-    print(
-        "🤖 Бот запущен!"
+    print("🤖 Бот запущен!")
+
+
+    application.run_polling(
+        drop_pending_updates=True
     )
-
-
-    application.run_polling()
-
-
-
-if __name__ == "__main__":
-
-    main()
 
 
 if __name__ == "__main__":
