@@ -1,8 +1,9 @@
 import os
 import threading
+import html
 import requests
-from bs4 import BeautifulSoup
 
+from bs4 import BeautifulSoup
 from flask import Flask
 
 from telegram import Update
@@ -15,12 +16,19 @@ from telegram.ext import (
 )
 
 
+# =========================
+# НАСТРОЙКИ
+# =========================
+
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 
+# УКАЖИ СВОЙ TELEGRAM USERNAME
+CREATOR = "@teqwyz"
 
-# =====================
-# FLASK SERVER
-# =====================
+
+# =========================
+# FLASK ДЛЯ RENDER
+# =========================
 
 app = Flask(__name__)
 
@@ -30,8 +38,15 @@ def home():
     return "Telegram Search Bot is running!"
 
 
+
 def run_web():
-    port = int(os.environ.get("PORT", 10000))
+
+    port = int(
+        os.environ.get(
+            "PORT",
+            10000
+        )
+    )
 
     app.run(
         host="0.0.0.0",
@@ -39,11 +54,12 @@ def run_web():
     )
 
 
-# =====================
-# SEARCH
-# =====================
 
-def duck_search(query):
+# =========================
+# ПОИСК
+# =========================
+
+def search_web(query):
 
     url = "https://lite.duckduckgo.com/lite/"
 
@@ -51,6 +67,7 @@ def duck_search(query):
         "User-Agent":
         "Mozilla/5.0"
     }
+
 
     try:
 
@@ -66,11 +83,11 @@ def duck_search(query):
         response.raise_for_status()
 
 
-    except Exception as e:
+    except Exception as error:
 
         print(
-            "Search error:",
-            e
+            "Ошибка поиска:",
+            error
         )
 
         return []
@@ -109,9 +126,9 @@ def duck_search(query):
 
 
 
-# =====================
-# COMMAND START
-# =====================
+# =========================
+# START
+# =========================
 
 async def start(
     update: Update,
@@ -120,18 +137,47 @@ async def start(
 
     await update.message.reply_text(
         "👋 Привет!\n\n"
-        "Я поисковый бот.\n\n"
-        "Напиши запрос, например:\n\n"
-        "🔎 GTA 6 дата выхода\n"
-        "🔎 Новости ИИ\n"
-        "🔎 Кто такой Дуров"
+        "Я поисковый Telegram-бот.\n\n"
+        "Отправь мне запрос, и я найду информацию 🔎"
     )
 
 
 
-# =====================
-# SEARCH HANDLER
-# =====================
+# =========================
+# CREATOR
+# =========================
+
+async def creator(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    await update.message.reply_text(
+        f"🤖 Меня создал:\n{CREATOR}"
+    )
+
+
+
+# =========================
+# ОБ ИНФОРМАЦИИ
+# =========================
+
+async def about(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    await update.message.reply_text(
+        "🤖 Telegram Search Bot\n\n"
+        "Версия: 1.0\n"
+        f"Создатель: {CREATOR}"
+    )
+
+
+
+# =========================
+# ОСНОВНОЙ ОБРАБОТЧИК
+# =========================
 
 async def search(
     update: Update,
@@ -140,22 +186,52 @@ async def search(
 
     query = update.message.text.strip()
 
-
     if not query:
         return
 
 
-    msg = await update.message.reply_text(
+    low = query.lower()
+
+
+    # Проверка вопроса о создателе
+
+    creator_questions = [
+
+        "кто твой создатель",
+        "кто тебя создал",
+        "кто твой автор",
+        "кто тебя сделал",
+        "кто разработчик",
+        "кто написал тебя"
+
+    ]
+
+
+    if any(
+        item in low
+        for item in creator_questions
+    ):
+
+        await update.message.reply_text(
+            f"🤖 Меня создал:\n{CREATOR}"
+        )
+
+        return
+
+
+
+    message = await update.message.reply_text(
         "🔎 Ищу..."
     )
 
 
-    results = duck_search(query)
+    results = search_web(query)
+
 
 
     if not results:
 
-        await msg.edit_text(
+        await message.edit_text(
             "😕 Ничего не найдено.\n"
             "Попробуй изменить запрос."
         )
@@ -169,16 +245,14 @@ async def search(
     )
 
 
-    for i, item in enumerate(
+    for number, item in enumerate(
         results,
-        start=1
+        1
     ):
 
-        title = (
+
+        title = html.escape(
             item["title"]
-            .replace("&","&amp;")
-            .replace("<","&lt;")
-            .replace(">","&gt;")
         )
 
 
@@ -186,12 +260,13 @@ async def search(
 
 
         text += (
-            f"{i}. <b>{title}</b>\n"
+            f"{number}. <b>{title}</b>\n"
             f"🔗 <a href=\"{url}\">Открыть</a>\n\n"
         )
 
 
-    await msg.edit_text(
+
+    await message.edit_text(
         text,
         parse_mode="HTML",
         disable_web_page_preview=False
@@ -199,9 +274,9 @@ async def search(
 
 
 
-# =====================
-# MAIN
-# =====================
+# =========================
+# ЗАПУСК
+# =========================
 
 def main():
 
@@ -220,10 +295,27 @@ def main():
     )
 
 
+
     bot.add_handler(
         CommandHandler(
             "start",
             start
+        )
+    )
+
+
+    bot.add_handler(
+        CommandHandler(
+            "creator",
+            creator
+        )
+    )
+
+
+    bot.add_handler(
+        CommandHandler(
+            "about",
+            about
         )
     )
 
@@ -237,7 +329,7 @@ def main():
 
 
     print(
-        "BOT STARTED"
+        "🤖 BOT STARTED"
     )
 
 
