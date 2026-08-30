@@ -4,6 +4,7 @@ import threading
 import requests
 
 from flask import Flask
+
 from bs4 import BeautifulSoup
 
 from telegram import (
@@ -22,23 +23,32 @@ from telegram.ext import (
 )
 
 
-TOKEN = os.environ.get("BOT_TOKEN")
+# =========================
+# CONFIG
+# =========================
+
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
+
+PORT = int(
+    os.environ.get(
+        "PORT",
+        10000
+    )
+)
 
 OWNER = "@teqwyz"
 
-PORT = int(os.environ.get("PORT", 10000))
-
 
 # =========================
-# FLASK
+# FLASK FOR RENDER
 # =========================
 
 app = Flask(__name__)
 
 
 @app.route("/")
-def home():
-    return "Telegram Search Bot is alive"
+def index():
+    return "Bot is running!"
 
 
 
@@ -68,7 +78,7 @@ def search_web(query):
                 "User-Agent":
                 "Mozilla/5.0"
             },
-            timeout=15
+            timeout=10
         )
 
 
@@ -81,7 +91,9 @@ def search_web(query):
         results = []
 
 
-        for item in soup.select(".result"):
+        for item in soup.select(
+            ".result"
+        ):
 
             a = item.select_one(
                 ".result__a"
@@ -91,16 +103,10 @@ def search_web(query):
             if a:
 
                 results.append(
-                    {
-                        "title":
-                        a.get_text(
-                            " ",
-                            strip=True
-                        ),
-
-                        "url":
+                    (
+                        a.text.strip(),
                         a.get("href")
-                    }
+                    )
                 )
 
 
@@ -119,24 +125,125 @@ def search_web(query):
 
 
 # =========================
-# COMMANDS
+# LINKS
 # =========================
 
+def encode(text):
+
+    return requests.utils.quote(
+        text
+    )
+
+
+
+def music_buttons(query):
+
+    q = encode(query)
+
+    return InlineKeyboardMarkup(
+        [
+
+            [
+                InlineKeyboardButton(
+                    "🎵 Spotify",
+                    url=f"https://open.spotify.com/search/{q}"
+                )
+            ],
+
+            [
+                InlineKeyboardButton(
+                    "🎵 Яндекс Музыка",
+                    url=f"https://music.yandex.ru/search?text={q}"
+                )
+            ],
+
+            [
+                InlineKeyboardButton(
+                    "🎵 VK Музыка",
+                    url=f"https://vk.com/search?c%5Bq%5D={q}&c%5Bsection%5D=audio"
+                )
+            ]
+
+        ]
+    )
+
+
+
+def video_buttons(query):
+
+    q = encode(query)
+
+    return InlineKeyboardMarkup(
+        [
+
+            [
+                InlineKeyboardButton(
+                    "▶ YouTube",
+                    url=f"https://youtube.com/results?search_query={q}"
+                )
+            ]
+
+        ]
+    )
+
+
+
+def menu_buttons():
+
+    return InlineKeyboardMarkup(
+        [
+
+            [
+                InlineKeyboardButton(
+                    "🌐 Веб-поиск",
+                    callback_data="web"
+                )
+            ],
+
+            [
+                InlineKeyboardButton(
+                    "🎵 Музыка",
+                    callback_data="music"
+                )
+            ],
+
+            [
+                InlineKeyboardButton(
+                    "🎬 Видео",
+                    callback_data="video"
+                )
+            ]
+
+        ]
+    )
+
+
+
+# =========================
+# TELEGRAM
+# =========================
+
+user_mode = {}
+
+
+
 async def start(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
+        update: Update,
+        context: ContextTypes.DEFAULT_TYPE
 ):
 
     await update.message.reply_text(
         "👋 Привет!\n\n"
-        "Напиши запрос для поиска."
+        "Я поисковый бот.\n"
+        "Выбери режим поиска:",
+        reply_markup=menu_buttons()
     )
 
 
 
 async def creator(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
+        update,
+        context
 ):
 
     await update.message.reply_text(
@@ -145,13 +252,52 @@ async def creator(
 
 
 
-# =========================
-# MESSAGE
-# =========================
+async def button(
+        update: Update,
+        context: ContextTypes.DEFAULT_TYPE
+):
 
-async def message_handler(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
+    query = update.callback_query
+
+    await query.answer()
+
+
+    user_mode[
+        query.from_user.id
+    ] = query.data
+
+
+    names = {
+
+        "web":
+        "🌐 Веб-поиск",
+
+        "music":
+        "🎵 Музыка",
+
+        "video":
+        "🎬 Видео"
+
+    }
+
+
+    await query.edit_message_text(
+
+        "Выбран режим:\n"
+        + names.get(
+            query.data,
+            "Поиск"
+        )
+        +
+        "\n\nОтправь запрос."
+
+    )
+
+
+
+async def message(
+        update: Update,
+        context: ContextTypes.DEFAULT_TYPE
 ):
 
     text = update.message.text.strip()
@@ -174,118 +320,165 @@ async def message_handler(
 
 
 
-    context.user_data["query"] = text
+    mode = user_mode.get(
+        update.message.from_user.id,
+        "web"
+    )
 
 
-    keyboard = [
+    if mode == "music":
 
-        [
-            InlineKeyboardButton(
-                "🎵 Музыка",
-                callback_data="music"
-            )
-        ],
+        await update.message.reply_text(
+            "Выбери сервис:",
+            reply_markup=
+            music_buttons(text)
+        )
 
-        [
-            InlineKeyboardButton(
-                "▶️ Видео",
-                callback_data="video"
-            )
-        ],
-
-        [
-            InlineKeyboardButton(
-                "🔎 Веб-поиск",
-                callback_data="web"
-            )
-        ]
-
-    ]
+        return
 
 
-    await update.message.reply_text(
-        "Что искать?",
+
+    if mode == "video":
+
+        await update.message.reply_text(
+            "Видео:",
+            reply_markup=
+            video_buttons(text)
+        )
+
+        return
+
+
+
+    msg = await update.message.reply_text(
+        "🔎 Ищу..."
+    )
+
+
+    results = search_web(
+        text
+    )
+
+
+    if not results:
+
+        await msg.edit_text(
+            "😕 Ничего не найдено"
+        )
+
+        return
+
+
+
+    answer = (
+        "🌐 <b>Результаты:</b>\n\n"
+    )
+
+
+    buttons = []
+
+
+    for i, item in enumerate(
+        results,
+        1
+    ):
+
+        title = html.escape(
+            item[0]
+        )
+
+
+        answer += (
+            f"{i}. {title}\n\n"
+        )
+
+
+        buttons.append(
+            [
+
+                InlineKeyboardButton(
+                    f"🔗 {i}",
+                    url=item[1]
+                )
+
+            ]
+        )
+
+
+    await msg.edit_text(
+
+        answer,
+
+        parse_mode="HTML",
+
         reply_markup=
         InlineKeyboardMarkup(
-            keyboard
+            buttons
         )
+
     )
 
 
 
 # =========================
-# BUTTONS
+# MAIN
 # =========================
 
-async def button_handler(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
 
-    query = update.callback_query
+def main():
 
-    await query.answer()
+    flask_thread = threading.Thread(
+        target=run_flask
+    )
+
+    flask_thread.daemon = True
+
+    flask_thread.start()
 
 
-    text = context.user_data.get(
-        "query",
-        ""
+
+    application = (
+        Application
+        .builder()
+        .token(BOT_TOKEN)
+        .build()
     )
 
 
-    q = text.replace(
-        " ",
-        "+"
-    )
-
-
-
-    if query.data == "music":
-
-
-        keyboard = [
-
-            [
-                InlineKeyboardButton(
-                    "🎧 Spotify",
-                    url=
-                    f"https://open.spotify.com/search/{q}"
-                )
-            ],
-
-            [
-                InlineKeyboardButton(
-                    "🎵 Яндекс Музыка",
-                    url=
-                    f"https://music.yandex.ru/search?text={q}"
-                )
-            ],
-
-            [
-                InlineKeyboardButton(
-                    "🎶 VK Музыка",
-                    url=
-                    f"https://vk.com/audios?q={q}"
-                )
-            ]
-
-        ]
-
-
-        await query.edit_message_text(
-            "🎵 Музыка:",
-            reply_markup=
-            InlineKeyboardMarkup(
-                keyboard
-            )
+    application.add_handler(
+        CommandHandler(
+            "start",
+            start
         )
+    )
+
+
+    application.add_handler(
+        CallbackQueryHandler(
+            button
+        )
+    )
+
+
+    application.add_handler(
+        MessageHandler(
+            filters.TEXT
+            &
+            ~filters.COMMAND,
+            message
+        )
+    )
+
+
+    print(
+        "BOT STARTED"
+    )
+
+
+    application.run_polling()
 
 
 
-    elif query.data == "video":
+if __name__ == "__main__":
 
-
-        keyboard = [
-
-            [
-                Inline
+    main()
