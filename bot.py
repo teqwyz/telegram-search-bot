@@ -1,9 +1,10 @@
 import os
 import threading
-import urllib.parse
+import html
 import requests
 
 from flask import Flask
+
 from bs4 import BeautifulSoup
 
 from telegram import (
@@ -17,12 +18,17 @@ from telegram.ext import (
     CommandHandler,
     MessageHandler,
     ContextTypes,
-    filters
+    filters,
 )
 
 
+BOT_TOKEN = os.environ["BOT_TOKEN"]
+
+OWNER_USERNAME = "@teqwyz"
+
+
 # =========================
-# FLASK SERVER (RENDER)
+# FLASK ДЛЯ RENDER
 # =========================
 
 web_app = Flask(__name__)
@@ -33,15 +39,8 @@ def home():
     return "Telegram Search Bot is running!"
 
 
-
 def run_web():
-
-    port = int(
-        os.environ.get(
-            "PORT",
-            10000
-        )
-    )
+    port = int(os.environ.get("PORT", 10000))
 
     web_app.run(
         host="0.0.0.0",
@@ -49,56 +48,73 @@ def run_web():
     )
 
 
-
 # =========================
-# SETTINGS
-# =========================
-
-BOT_TOKEN = os.environ["BOT_TOKEN"]
-
-# УКАЖИ СВОЙ TELEGRAM USERNAME
-CREATOR = "@teqwyz"
-)
-
-
-
-# =========================
-# WEB SEARCH
+# ПОИСК
 # =========================
 
 def search_web(query):
 
     url = "https://html.duckduckgo.com/html/"
 
-
     headers = {
         "User-Agent":
         "Mozilla/5.0"
     }
 
-
     try:
 
-        response = requests.get(
+        r = requests.get(
             url,
             params={
                 "q": query
             },
             headers=headers,
-            timeout=15
+            timeout=20
         )
-
 
         soup = BeautifulSoup(
-            response.text,
+            r.text,
             "html.parser"
         )
+
+
+        results = []
+
+
+        for item in soup.select(".result"):
+
+            title = item.select_one(
+                ".result__a"
+            )
+
+            if not title:
+                continue
+
+
+            link = title.get("href")
+
+
+            text = title.get_text(
+                " ",
+                strip=True
+            )
+
+
+            results.append(
+                {
+                    "title": text,
+                    "url": link
+                }
+            )
+
+
+        return results[:5]
 
 
     except Exception as e:
 
         print(
-            "Search error:",
+            "SEARCH ERROR:",
             e
         )
 
@@ -106,203 +122,65 @@ def search_web(query):
 
 
 
-    results = []
-
-
-    for item in soup.select(".result"):
-
-
-        link = item.select_one(
-            ".result__a"
-        )
-
-
-        if not link:
-            continue
-
-
-
-        results.append(
-            {
-                "title":
-                link.get_text(
-                    " ",
-                    strip=True
-                ),
-
-                "url":
-                link.get("href")
-            }
-        )
-
-
-
-    return results
-
-
-
-
 # =========================
-# VIDEO SEARCH
-# =========================
-
-def video_search(query):
-
-    q = urllib.parse.quote(
-        query
-    )
-
-
-    return [
-
-        {
-            "title":
-            f"🎬 YouTube: {query}",
-
-            "url":
-            f"https://youtube.com/results?search_query={q}"
-        }
-
-    ]
-
-
-
-# =========================
-# AUDIO SEARCH
-# =========================
-
-def audio_search(query):
-
-    q = urllib.parse.quote(
-        query
-    )
-
-
-    return [
-
-        {
-            "title":
-            f"🎵 Яндекс Музыка: {query}",
-
-            "url":
-            f"https://music.yandex.ru/search?text={q}"
-        },
-
-
-        {
-            "title":
-            f"🎧 VK Музыка: {query}",
-
-            "url":
-            f"https://vk.com/audio?q={q}"
-        },
-
-
-        {
-            "title":
-            f"▶️ YouTube Music: {query}",
-
-            "url":
-            f"https://music.youtube.com/search?q={q}"
-        }
-
-    ]
-
-
-
-# =========================
-# DETECT TYPE
-# =========================
-
-def detect_type(text):
-
-    text = text.lower()
-
-
-
-    video = [
-        "видео",
-        "ролик",
-        "трейлер",
-        "клип",
-        "фильм"
-    ]
-
-
-    audio = [
-        "песня",
-        "музыка",
-        "трек",
-        "альбом",
-        "слушать",
-        "исполнитель",
-        "артист"
-    ]
-
-
-
-    if any(
-        word in text
-        for word in video
-    ):
-        return "video"
-
-
-
-    if any(
-        word in text
-        for word in audio
-    ):
-        return "audio"
-
-
-
-    return "web"
-
-
-
-
-# =========================
-# COMMANDS
+# START
 # =========================
 
 async def start(
-        update: Update,
-        context: ContextTypes.DEFAULT_TYPE):
-
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
 
     await update.message.reply_text(
         "👋 Привет!\n\n"
         "Я поисковый бот.\n\n"
-        "Могу искать:\n"
-        "🔎 сайты\n"
-        "🎬 видео\n"
-        "🎵 музыку"
-    )
-
-
-
-async def creator(
-        update: Update,
-        context: ContextTypes.DEFAULT_TYPE):
-
-
-    await update.message.reply_text(
-        f"🤖 Меня создал {CREATOR_USERNAME}"
+        "Отправь запрос:\n"
+        "🔎 GTA 6 дата выхода\n"
+        "🎵 музыка Цоя\n"
+        "🎬 трейлер фильма"
     )
 
 
 
 # =========================
-# MESSAGE SEARCH
+# СОЗДАТЕЛЬ
+# =========================
+
+async def creator(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    await update.message.reply_text(
+        f"🤖 Меня создал {OWNER_USERNAME}"
+    )
+
+
+
+# =========================
+# ПОИСК В TELEGRAM
 # =========================
 
 async def search(
-        update: Update,
-        context: ContextTypes.DEFAULT_TYPE):
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    query = update.message.text.strip()
 
 
-    query = update.message.text
+    if (
+        "кто твой создатель" in query.lower()
+        or
+        "кто тебя создал" in query.lower()
+    ):
+
+        await creator(
+            update,
+            context
+        )
+
+        return
 
 
 
@@ -311,91 +189,68 @@ async def search(
     )
 
 
-
-    mode = detect_type(
-        query
-    )
-
-
-
-    if mode == "audio":
-
-        results = audio_search(
-            query
-        )
-
-
-    elif mode == "video":
-
-        results = video_search(
-            query
-        )
-
-
-    else:
-
-        results = search_web(
-            query
-        )
-
-
+    results = search_web(query)
 
 
     if not results:
 
         await msg.edit_text(
-            "😕 Ничего не найдено"
+            "😕 Ничего не найдено.\n"
+            "Попробуй другой запрос."
         )
 
         return
 
 
 
+    text = (
+        "🔎 <b>Результаты:</b>\n\n"
+    )
+
 
     buttons = []
 
-    text = "🔎 Результаты:\n\n"
+
+    for i, item in enumerate(
+        results,
+        1
+    ):
+
+        title = html.escape(
+            item["title"]
+        )
 
 
-
-    for result in results[:5]:
+        url = item["url"]
 
 
         text += (
-            result["title"]
-            +
-            "\n\n"
+            f"{i}. {title}\n"
         )
 
 
         buttons.append(
             [
                 InlineKeyboardButton(
-                    "🔗 Открыть",
-                    url=result["url"]
+                    f"🔗 {i}. Открыть",
+                    url=url
                 )
             ]
         )
 
 
-
-
     await msg.edit_text(
-
         text,
-
-        reply_markup=
-        InlineKeyboardMarkup(
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(
             buttons
         )
-
     )
 
 
 
-
 # =========================
-# MAIN
+# ЗАПУСК
 # =========================
 
 def main():
@@ -407,7 +262,7 @@ def main():
 
 
 
-    application = (
+    bot = (
         Application
         .builder()
         .token(BOT_TOKEN)
@@ -415,8 +270,7 @@ def main():
     )
 
 
-
-    application.add_handler(
+    bot.add_handler(
         CommandHandler(
             "start",
             start
@@ -424,27 +278,12 @@ def main():
     )
 
 
-
-    application.add_handler(
+    bot.add_handler(
         MessageHandler(
-            filters.Regex(
-                "Кто твой создатель"
-            ),
-            creator
-        )
-    )
-
-
-
-    application.add_handler(
-        MessageHandler(
-            filters.TEXT
-            &
-            ~filters.COMMAND,
+            filters.TEXT & ~filters.COMMAND,
             search
         )
     )
-
 
 
     print(
@@ -452,13 +291,12 @@ def main():
     )
 
 
-
-    application.run_polling(
+    bot.run_polling(
         drop_pending_updates=True
     )
 
 
 
-
 if __name__ == "__main__":
+
     main()
