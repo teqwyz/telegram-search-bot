@@ -16,7 +16,6 @@ def home():
     return "Telegram Search Bot is running!"
 
 def results = search_startpage(query):
-    url = "https://html.duckduckgo.com/html/"
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
