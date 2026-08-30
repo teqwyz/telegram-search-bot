@@ -1,8 +1,10 @@
 import os
 import html
-import requests
-import threading
 import asyncio
+import threading
+import requests
+
+from urllib.parse import quote
 
 from flask import Flask, request
 
@@ -23,26 +25,39 @@ from telegram.ext import (
 )
 
 
+# =========================
+# SETTINGS
+# =========================
+
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 
-PORT = int(os.environ.get("PORT", 10000))
+PORT = int(
+    os.environ.get(
+        "PORT",
+        10000
+    )
+)
 
-RENDER_URL = "https://telegram-search-bot-g9vr.onrender.com"
+RENDER_URL = (
+    "https://telegram-search-bot-g9vr.onrender.com"
+)
 
+
+# =========================
+# FLASK
+# =========================
 
 app = Flask(__name__)
 
 telegram_app = None
 
 
-# =====================
-# FLASK
-# =====================
-
-
 @app.route("/")
 def home():
-    return "Telegram Search Bot is running!"
+
+    return (
+        "Telegram Search Bot is running!"
+    )
 
 
 
@@ -50,70 +65,87 @@ def home():
     f"/{BOT_TOKEN}",
     methods=["POST"]
 )
-def webhook():
+def telegram_webhook():
 
-    data = request.get_json(force=True)
+    try:
 
-    update = Update.de_json(
-        data,
-        telegram_app.bot
-    )
+        data = request.get_json(
+            force=True
+        )
 
-    asyncio.run(
-        telegram_app.process_update(update)
-    )
+        update = Update.de_json(
+            data,
+            telegram_app.bot
+        )
+
+
+        asyncio.run_coroutine_threadsafe(
+            telegram_app.process_update(update),
+            telegram_loop
+        )
+
+
+    except Exception as e:
+
+        print(
+            "Webhook error:",
+            e
+        )
+
 
     return "OK"
 
 
 
-# =====================
+# =========================
 # SEARCH
-# =====================
-
+# =========================
 
 def search_web(query):
 
+    results = []
+
+    encoded = quote(query)
+
+
+    # -------- GOOGLE --------
+
     try:
 
-        url = "https://www.google.com/search"
-
-        headers = {
-            "User-Agent":
-            "Mozilla/5.0"
-        }
-
-
-        r = requests.get(
-            url,
+        response = requests.get(
+            "https://www.google.com/search",
             params={
                 "q": query
             },
-            headers=headers,
+            headers={
+                "User-Agent":
+                "Mozilla/5.0"
+            },
             timeout=10
         )
 
 
         soup = BeautifulSoup(
-            r.text,
+            response.text,
             "html.parser"
         )
 
 
-        results = []
+        for link in soup.find_all("a"):
 
-
-        for a in soup.find_all("a"):
-
-            href = a.get("href")
+            href = link.get(
+                "href"
+            )
 
 
             if (
                 href
-                and href.startswith("http")
+                and href.startswith(
+                    "http"
+                )
             ):
 
-                title = a.get_text(
+                title = link.get_text(
                     " ",
                     strip=True
                 )
@@ -123,8 +155,14 @@ def search_web(query):
 
                     results.append(
                         {
-                            "title": title,
-                            "url": href
+                            "title":
+                            title[:70],
+
+                            "url":
+                            href,
+
+                            "type":
+                            "🌐"
                         }
                     )
 
@@ -134,24 +172,82 @@ def search_web(query):
 
 
 
-        return results
-
-
     except Exception as e:
 
         print(
-            "SEARCH ERROR:",
+            "Google search error:",
             e
         )
 
-        return []
+
+
+    # -------- MUSIC --------
+
+
+    results.append(
+        {
+            "title":
+            f"Яндекс Музыка — {query}",
+
+            "url":
+            (
+                "https://music.yandex.ru/search?"
+                f"text={encoded}"
+            ),
+
+            "type":
+            "🎵"
+        }
+    )
 
 
 
-# =====================
+    results.append(
+        {
+            "title":
+            f"VK Музыка — {query}",
+
+            "url":
+            (
+                "https://vk.com/audios?"
+                f"q={encoded}"
+            ),
+
+            "type":
+            "🎵"
+        }
+    )
+
+
+
+    # -------- VIDEO --------
+
+
+    results.append(
+        {
+            "title":
+            f"YouTube — {query}",
+
+            "url":
+            (
+                "https://youtube.com/results?"
+                f"search_query={encoded}"
+            ),
+
+            "type":
+            "🎬"
+        }
+    )
+
+
+    return results
+
+
+
+
+# =========================
 # COMMANDS
-# =====================
-
+# =========================
 
 async def start(
     update: Update,
@@ -160,8 +256,9 @@ async def start(
 
     await update.message.reply_text(
         "👋 Привет!\n\n"
-        "Я поисковый Telegram-бот.\n"
-        "Отправь мне запрос 🔎"
+        "Я поисковый бот 🔎\n\n"
+        "Ищу сайты, музыку и видео.\n\n"
+        "Просто отправь запрос."
     )
 
 
@@ -172,27 +269,21 @@ async def creator(
 ):
 
     await update.message.reply_text(
-        "🤖 Меня создал @teqwyz"
+        "Меня создал @teqwyz)))"
     )
 
 
 
-# =====================
-# MESSAGE
-# =====================
-
+# =========================
+# MESSAGES
+# =========================
 
 async def message_handler(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
 
-    text = update.message.text
-
-
-    if not text:
-        return
-
+    text = update.message.text.strip()
 
 
     if (
@@ -212,19 +303,22 @@ async def message_handler(
 
 
 
-    msg = await update.message.reply_text(
-        "🔎 Ищу информацию..."
+    loading = await update.message.reply_text(
+        "🔎 Ищу..."
     )
 
 
-    results = search_web(text)
+
+    results = search_web(
+        text
+    )
 
 
 
     if not results:
 
-        await msg.edit_text(
-            "😕 Не смог найти результаты"
+        await loading.edit_text(
+            "😕 Ничего не найдено"
         )
 
         return
@@ -232,7 +326,7 @@ async def message_handler(
 
 
     answer = (
-        "🔎 <b>Результаты поиска:</b>\n\n"
+        "🔎 <b>Результаты:</b>\n\n"
     )
 
 
@@ -240,25 +334,27 @@ async def message_handler(
 
 
 
-    for i, item in enumerate(
+    for number, item in enumerate(
         results,
         1
     ):
 
         title = html.escape(
-            item["title"][:70]
+            item["title"]
         )
 
 
         answer += (
-            f"{i}. {title}\n\n"
+            f"{number}. "
+            f"{item['type']} "
+            f"{title}\n\n"
         )
 
 
         buttons.append(
             [
                 InlineKeyboardButton(
-                    f"Открыть {i}",
+                    f"Открыть {number}",
                     url=item["url"]
                 )
             ]
@@ -266,7 +362,7 @@ async def message_handler(
 
 
 
-    await msg.edit_text(
+    await loading.edit_text(
         answer,
         parse_mode="HTML",
         reply_markup=
@@ -275,12 +371,14 @@ async def message_handler(
 
 
 
-# =====================
-# TELEGRAM START
-# =====================
+# =========================
+# TELEGRAM INIT
+# =========================
+
+telegram_loop = None
 
 
-async def init_bot():
+async def setup_bot():
 
     global telegram_app
 
@@ -316,6 +414,7 @@ async def init_bot():
     await telegram_app.bot.delete_webhook()
 
 
+
     await telegram_app.bot.set_webhook(
         f"{RENDER_URL}/{BOT_TOKEN}"
     )
@@ -325,31 +424,41 @@ async def init_bot():
 
 
 
-def start_bot():
+def telegram_thread():
 
-    loop = asyncio.new_event_loop()
+    global telegram_loop
 
-    asyncio.set_event_loop(loop)
 
-    loop.run_until_complete(
-        init_bot()
+    telegram_loop = asyncio.new_event_loop()
+
+    asyncio.set_event_loop(
+        telegram_loop
     )
 
-    loop.run_forever()
+
+    telegram_loop.run_until_complete(
+        setup_bot()
+    )
+
+
+    telegram_loop.run_forever()
 
 
 
-# =====================
+# =========================
 # RUN
-# =====================
-
+# =========================
 
 if __name__ == "__main__":
 
-    threading.Thread(
-        target=start_bot,
+
+    thread = threading.Thread(
+        target=telegram_thread,
         daemon=True
-    ).start()
+    )
+
+    thread.start()
+
 
 
     app.run(
