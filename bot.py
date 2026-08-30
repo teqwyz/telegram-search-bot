@@ -1,45 +1,51 @@
 import os
 import threading
 import requests
+import urllib.parse
+import html
 
 from bs4 import BeautifulSoup
 from flask import Flask
 
-from telegram import Update
+from telegram import (
+    Update,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup
+)
+
 from telegram.ext import (
     Application,
     CommandHandler,
     MessageHandler,
     ContextTypes,
-    filters,
+    filters
 )
 
 
-# =========================
-# НАСТРОЙКИ
-# =========================
+# =====================
+# CONFIG
+# =====================
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 
 if not BOT_TOKEN:
-    raise ValueError(
-        "Не найдена переменная BOT_TOKEN"
-    )
+    raise Exception("BOT_TOKEN не найден")
 
 
-# =========================
-# FLASK SERVER
-# =========================
+# =====================
+# FLASK
+# =====================
 
 app = Flask(__name__)
 
 
 @app.route("/")
 def home():
-    return "Telegram Search Bot is running!"
+    return "Telegram Search Bot OK"
 
 
-def run_web_server():
+
+def run_server():
 
     port = int(
         os.environ.get(
@@ -54,19 +60,54 @@ def run_web_server():
     )
 
 
-# =========================
-# ПОИСК DUCKDUCKGO
-# =========================
+
+# =====================
+# DUCKDUCKGO SEARCH
+# =====================
+
+
+def fix_url(url):
+
+    """
+    Превращает ссылку DuckDuckGo
+    в настоящую ссылку сайта
+    """
+
+    try:
+
+        parsed = urllib.parse.urlparse(url)
+
+        query = urllib.parse.parse_qs(
+            parsed.query
+        )
+
+
+        if "uddg" in query:
+
+            return urllib.parse.unquote(
+                query["uddg"][0]
+            )
+
+
+    except Exception:
+        pass
+
+
+    return url
+
+
 
 def search_duckduckgo(query):
 
-    url = "https://html.duckduckgo.com/html/"
+    url = (
+        "https://html.duckduckgo.com/html/"
+    )
 
 
     headers = {
+
         "User-Agent":
-            "Mozilla/5.0 "
-            "(Windows NT 10.0; Win64; x64)"
+        "Mozilla/5.0"
     }
 
 
@@ -88,11 +129,12 @@ def search_duckduckgo(query):
     except Exception as e:
 
         print(
-            "Ошибка DuckDuckGo:",
+            "Ошибка поиска:",
             e
         )
 
         return []
+
 
 
     soup = BeautifulSoup(
@@ -104,12 +146,10 @@ def search_duckduckgo(query):
     results = []
 
 
-    items = soup.select(
+    for item in soup.select(
         ".result"
-    )
+    )[:5]:
 
-
-    for item in items[:5]:
 
         link = item.select_one(
             ".result__a"
@@ -126,8 +166,8 @@ def search_duckduckgo(query):
         )
 
 
-        url = link.get(
-            "href"
+        url = fix_url(
+            link.get("href")
         )
 
 
@@ -138,6 +178,7 @@ def search_duckduckgo(query):
 
         description = ""
 
+
         if desc:
 
             description = desc.get_text(
@@ -146,13 +187,15 @@ def search_duckduckgo(query):
             )
 
 
-        results.append(
-            {
-                "title": title,
-                "url": url,
-                "description": description
-            }
-        )
+        results.append({
+
+            "title": title,
+
+            "url": url,
+
+            "description": description
+
+        })
 
 
     print(
@@ -165,9 +208,10 @@ def search_duckduckgo(query):
 
 
 
-# =========================
-# TELEGRAM COMMANDS
-# =========================
+# =====================
+# TELEGRAM
+# =====================
+
 
 async def start(
         update: Update,
@@ -175,12 +219,14 @@ async def start(
 ):
 
     await update.message.reply_text(
+
         "👋 Привет!\n\n"
-        "Я бот поиска информации.\n\n"
-        "Напиши любой запрос:\n\n"
-        "🔎 Новости ИИ\n"
-        "🔎 GTA 6 дата выхода\n"
-        "🔎 Кто такой Павел Дуров"
+        "Я бот поиска.\n\n"
+        "Напиши запрос:"
+        "\n\n🔎 GTA 6"
+        "\n🔎 Новости ИИ"
+        "\n🔎 Павел Дуров"
+
     )
 
 
@@ -190,15 +236,12 @@ async def search(
         context: ContextTypes.DEFAULT_TYPE
 ):
 
+
     query = update.message.text.strip()
 
 
-    if not query:
-        return
-
-
     msg = await update.message.reply_text(
-        f"🔎 Ищу:\n{query}"
+        "🔎 Ищу..."
     )
 
 
@@ -207,113 +250,138 @@ async def search(
     )
 
 
+
     if not results:
 
         await msg.edit_text(
-            "😕 Ничего не найдено.\n\n"
-            "Попробуй изменить запрос."
+            "😕 Ничего не найдено"
         )
 
         return
 
 
 
-    text = (
-        "🔎 <b>Результаты поиска</b>\n\n"
-    )
-
-
-    for i, item in enumerate(
-        results,
-        start=1
-    ):
-
-
-        title = (
-            item["title"]
-            .replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
-        )
-
-
-        desc = (
-            item["description"]
-            .replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
-        )
-
-
-        url = item["url"]
-
-
-        text += (
-            f"<b>{i}. {title}</b>\n"
-        )
-
-
-        if desc:
-
-            text += (
-                f"{desc}\n"
-            )
-
-
-        text += (
-            f'🔗 <a href="{url}">Открыть</a>\n\n'
-        )
-
-
-
     await msg.edit_text(
-        text,
-        parse_mode="HTML",
-        disable_web_page_preview=True
+        "🔎 Найдено результатов:"
     )
 
 
+    for result in results:
 
-# =========================
-# ЗАПУСК БОТА
-# =========================
+
+        title = html.escape(
+            result["title"]
+        )
+
+
+        description = html.escape(
+            result["description"]
+        )
+
+
+        url = result["url"]
+
+
+        button = InlineKeyboardMarkup(
+
+            [[
+
+                InlineKeyboardButton(
+
+                    "🌐 Открыть сайт",
+
+                    url=url
+
+                )
+
+            ]]
+
+        )
+
+
+        text = (
+
+            f"<b>{title}</b>\n\n"
+
+        )
+
+
+        if description:
+
+            text += description
+
+
+
+        await update.message.reply_text(
+
+            text,
+
+            parse_mode="HTML",
+
+            reply_markup=button,
+
+            disable_web_page_preview=True
+
+        )
+
+
+
+# =====================
+# MAIN
+# =====================
+
 
 def main():
 
 
     threading.Thread(
-        target=run_web_server,
+
+        target=run_server,
+
         daemon=True
+
     ).start()
 
 
 
     bot = (
+
         Application
+
         .builder()
+
         .token(BOT_TOKEN)
+
         .build()
+
     )
 
 
     bot.add_handler(
+
         CommandHandler(
             "start",
             start
         )
+
     )
 
 
     bot.add_handler(
+
         MessageHandler(
+
             filters.TEXT & ~filters.COMMAND,
+
             search
+
         )
+
     )
 
 
     print(
-        "🤖 Бот запущен!"
+        "🤖 Бот запущен"
     )
 
 
@@ -324,4 +392,5 @@ def main():
 
 
 if __name__ == "__main__":
+
     main()
