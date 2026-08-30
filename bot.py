@@ -1,7 +1,14 @@
 import os
 import threading
 import requests
+from flask import Flask
 
+app = Flask(__name__)
+
+@app.route("/")
+def home():
+    return "Telegram bot is running!"
+    
 from bs4 import BeautifulSoup
 from flask import Flask
 from telegram import Update
