@@ -1,0 +1,13 @@
+name: Keep Alive Render
+
+on:
+  schedule:
+    # Запуск каждые 14 минут
+    - cron: '*/14 * * * *'
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Render App
+        run: curl -s https://telegram-search-bot-g9vr.onrender.com > /dev/null
