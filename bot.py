@@ -27,7 +27,7 @@ def home():
 # ПОИСК DUCKDUCKGO
 # =========================
 
-def search_duckduckgo(query):
+def search_startpage(query):
     url = "https://html.duckduckgo.com/html/"
 
     headers = {
