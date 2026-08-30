@@ -1,9 +1,11 @@
 import os
-import asyncio
+import html
 import threading
-from urllib.parse import quote
+import asyncio
+import requests
 
-from flask import Flask, request
+from flask import Flask
+from bs4 import BeautifulSoup
 
 from telegram import (
     Update,
@@ -21,11 +23,9 @@ from telegram.ext import (
 )
 
 
-# =========================
-# SETTINGS
-# =========================
+TOKEN = os.environ["BOT_TOKEN"]
 
-BOT_TOKEN = os.environ["BOT_TOKEN"]
+OWNER = "@teqwyz"
 
 PORT = int(
     os.environ.get(
@@ -34,74 +34,98 @@ PORT = int(
     )
 )
 
-RENDER_URL = (
-    "https://telegram-search-bot-g9vr.onrender.com"
-)
 
-
-# =========================
-# GLOBAL
-# =========================
+# ==========================
+# FLASK
+# ==========================
 
 app = Flask(__name__)
-
-telegram_app = None
-
-telegram_loop = None
-
-user_queries = {}
-
-
-
-# =========================
-# FLASK
-# =========================
 
 
 @app.route("/")
 def home():
-
-    return "Telegram Search Bot is running!"
-
+    return "Telegram Search Bot is running"
 
 
-@app.route(
-    f"/{BOT_TOKEN}",
-    methods=["POST"]
-)
-def webhook():
+
+def run_flask():
+
+    app.run(
+        host="0.0.0.0",
+        port=PORT
+    )
+
+
+
+# ==========================
+# WEB SEARCH
+# ==========================
+
+
+def web_search(text):
 
     try:
 
-        data = request.get_json()
-
-        update = Update.de_json(
-            data,
-            telegram_app.bot
+        response = requests.get(
+            "https://www.google.com/search",
+            params={
+                "q": text
+            },
+            headers={
+                "User-Agent":
+                "Mozilla/5.0"
+            },
+            timeout=10
         )
 
 
-        asyncio.run_coroutine_threadsafe(
-            telegram_app.process_update(update),
-            telegram_loop
+        soup = BeautifulSoup(
+            response.text,
+            "html.parser"
         )
+
+
+        results = []
+
+
+        for link in soup.find_all("a"):
+
+            href = link.get("href")
+
+            title = link.text.strip()
+
+
+            if (
+                href
+                and href.startswith("http")
+                and len(title) > 5
+            ):
+
+                results.append(
+                    {
+                        "title": title[:80],
+                        "url": href
+                    }
+                )
+
+
+        return results[:5]
 
 
     except Exception as e:
 
         print(
-            "Webhook error:",
+            "SEARCH ERROR:",
             e
         )
 
-
-    return "OK"
-
+        return []
 
 
-# =========================
-# START
-# =========================
+
+# ==========================
+# COMMANDS
+# ==========================
 
 
 async def start(
@@ -111,12 +135,8 @@ async def start(
 
     await update.message.reply_text(
         "👋 Привет!\n\n"
-        "Я поисковый бот 🔎\n\n"
-        "Ищу:\n"
-        "🌐 сайты\n"
-        "🎵 музыку\n"
-        "🎬 видео\n\n"
-        "Просто напиши запрос."
+        "Я поисковый бот.\n\n"
+        "Напиши что найти:"
     )
 
 
@@ -127,24 +147,26 @@ async def creator(
 ):
 
     await update.message.reply_text(
-        "🤖 Меня создал @teqwyz"
+        f"🤖 Меня создал {OWNER}"
     )
 
 
 
-# =========================
-# MESSAGE
-# =========================
+# ==========================
+# TEXT SEARCH
+# ==========================
 
 
-async def message_handler(
+async def search_handler(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
 
     text = update.message.text.strip()
 
-    user_id = update.message.from_user.id
+
+    if not text:
+        return
 
 
     if (
@@ -164,7 +186,7 @@ async def message_handler(
 
 
 
-    user_queries[user_id] = text
+    context.user_data["search"] = text
 
 
     keyboard = [
@@ -178,15 +200,15 @@ async def message_handler(
 
         [
             InlineKeyboardButton(
-                "🎬 Видео",
+                "▶️ Видео",
                 callback_data="video"
             )
         ],
 
         [
             InlineKeyboardButton(
-                "🌐 Сайты",
-                callback_data="sites"
+                "🔎 Веб-поиск",
+                callback_data="web"
             )
         ]
 
@@ -194,9 +216,7 @@ async def message_handler(
 
 
     await update.message.reply_text(
-        f"🔎 Поиск: <b>{text}</b>\n\n"
-        "Выбери категорию:",
-        parse_mode="HTML",
+        "Выберите тип поиска:",
         reply_markup=
         InlineKeyboardMarkup(
             keyboard
@@ -205,168 +225,212 @@ async def message_handler(
 
 
 
-# =========================
+# ==========================
 # BUTTONS
-# =========================
+# ==========================
 
 
-async def button_handler(
+async def buttons(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
 
-    query = update.callback_query
+    callback = update.callback_query
 
-    await query.answer()
-
-
-    user_id = query.from_user.id
+    await callback.answer()
 
 
-    text = user_queries.get(
-        user_id,
+    text = context.user_data.get(
+        "search",
         ""
     )
 
 
-    if not text:
-
-        await query.edit_message_text(
-            "❌ Запрос потерян. Напиши его заново."
-        )
-
-        return
-
-
-
-    encoded = quote(text)
-
+    q = text.replace(
+        " ",
+        "+"
+    )
 
 
     # MUSIC
 
-    if query.data == "music":
+    if callback.data == "music":
 
 
         keyboard = [
 
             [
                 InlineKeyboardButton(
-                    "🎵 Яндекс Музыка",
+                    "🎧 Spotify",
                     url=
-                    (
-                        "https://music.yandex.ru/search?"
-                        f"text={encoded}"
-                    )
+                    f"https://open.spotify.com/search/{q}"
                 )
             ],
 
+            [
+                InlineKeyboardButton(
+                    "🎵 Яндекс Музыка",
+                    url=
+                    f"https://music.yandex.ru/search?text={q}"
+                )
+            ],
 
             [
                 InlineKeyboardButton(
-                    "🎵 VK Музыка",
+                    "🎶 VK Музыка",
                     url=
-                    (
-                        "https://vk.com/audios?"
-                        f"q={encoded}"
-                    )
+                    f"https://vk.com/audios?q={q}"
                 )
             ]
 
         ]
 
 
-        await query.edit_message_text(
-            f"🎵 Музыка:\n\n{text}",
+        await callback.edit_message_text(
+
+            "🎵 Музыкальный поиск:",
+
             reply_markup=
             InlineKeyboardMarkup(
                 keyboard
             )
+
         )
 
 
 
     # VIDEO
 
-    elif query.data == "video":
+    elif callback.data == "video":
 
 
         keyboard = [
 
             [
+
                 InlineKeyboardButton(
-                    "🎬 YouTube",
+                    "▶️ YouTube",
                     url=
-                    (
-                        "https://youtube.com/results?"
-                        f"search_query={encoded}"
-                    )
+                    f"https://www.youtube.com/results?search_query={q}"
                 )
+
             ]
 
         ]
 
 
-        await query.edit_message_text(
-            f"🎬 Видео:\n\n{text}",
+        await callback.edit_message_text(
+
+            "▶️ Видео поиск:",
+
             reply_markup=
             InlineKeyboardMarkup(
                 keyboard
             )
+
         )
 
 
 
-    # SITES
+    # WEB
 
-    elif query.data == "sites":
+    elif callback.data == "web":
 
 
-        keyboard = [
+        results = web_search(text)
 
-            [
-                InlineKeyboardButton(
-                    "🌐 Google",
-                    url=
-                    (
-                        "https://www.google.com/search?"
-                        f"q={encoded}"
+
+        keyboard = []
+
+
+        answer = (
+            "🔎 <b>Результаты:</b>\n\n"
+        )
+
+
+        if not results:
+
+            answer += (
+                "Ничего не найдено"
+            )
+
+
+        for i, item in enumerate(
+            results,
+            1
+        ):
+
+            answer += (
+                f"{i}. "
+                f"{html.escape(item['title'])}\n"
+            )
+
+
+            keyboard.append(
+
+                [
+
+                    InlineKeyboardButton(
+                        f"🌐 Открыть {i}",
+                        url=item["url"]
                     )
-                )
-            ]
 
-        ]
+                ]
+
+            )
 
 
-        await query.edit_message_text(
-            f"🌐 Сайты:\n\n{text}",
+        await callback.edit_message_text(
+
+            answer,
+
+            parse_mode="HTML",
+
             reply_markup=
             InlineKeyboardMarkup(
                 keyboard
             )
+
         )
 
 
 
-# =========================
-# TELEGRAM
-# =========================
+# ==========================
+# ERROR HANDLER
+# ==========================
 
 
-async def setup_bot():
+async def error_handler(
+    update,
+    context
+):
 
-    global telegram_app
-
-
-    telegram_app = (
-        Application
-        .builder()
-        .token(BOT_TOKEN)
-        .build()
+    print(
+        "ERROR:",
+        context.error
     )
 
 
-    telegram_app.add_handler(
+
+# ==========================
+# BOT
+# ==========================
+
+
+async def run_bot():
+
+
+    bot = (
+
+        Application
+        .builder()
+        .token(TOKEN)
+        .build()
+
+    )
+
+
+    bot.add_handler(
         CommandHandler(
             "start",
             start
@@ -374,74 +438,52 @@ async def setup_bot():
     )
 
 
-    telegram_app.add_handler(
+    bot.add_handler(
         MessageHandler(
             filters.TEXT &
             ~filters.COMMAND,
-            message_handler
+            search_handler
         )
     )
 
 
-    telegram_app.add_handler(
+    bot.add_handler(
         CallbackQueryHandler(
-            button_handler
+            buttons
         )
     )
 
 
-    await telegram_app.initialize()
-
-
-    await telegram_app.bot.delete_webhook()
-
-
-    await telegram_app.bot.set_webhook(
-        f"{RENDER_URL}/{BOT_TOKEN}"
+    bot.add_error_handler(
+        error_handler
     )
 
 
-    await telegram_app.start()
-
-
-
-def telegram_worker():
-
-    global telegram_loop
-
-
-    telegram_loop = asyncio.new_event_loop()
-
-    asyncio.set_event_loop(
-        telegram_loop
+    print(
+        "BOT STARTED"
     )
 
 
-    telegram_loop.run_until_complete(
-        setup_bot()
+    await bot.run_polling(
+        drop_pending_updates=True
     )
 
 
-    telegram_loop.run_forever()
 
-
-
-# =========================
-# RUN
-# =========================
+# ==========================
+# START
+# ==========================
 
 
 if __name__ == "__main__":
 
 
     threading.Thread(
-        target=telegram_worker,
+        target=run_flask,
         daemon=True
     ).start()
 
 
-
-    app.run(
-        host="0.0.0.0",
-        port=PORT
+    asyncio.run(
+        run_bot()
     )
