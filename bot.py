@@ -15,7 +15,7 @@ web_app = Flask(__name__)
 def home():
     return "Telegram Search Bot is running!"
 
-def search_duckduckgo(query):
+def results = search_startpage(query):
     url = "https://html.duckduckgo.com/html/"
     headers = {
         "User-Agent": (
