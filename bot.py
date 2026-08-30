@@ -22,19 +22,14 @@ from telegram.ext import (
 
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 
-web_app = Flask(__name__)
 
-
-@web_app.route("/")
-def home():
-    return "Telegram Search Bot is running!"
 
 
 # =========================
 # ПОИСК DUCKDUCKGO
 # =========================
 
-def search_startpage(query):
+def search_duckduckgo(query):
     url = "https://html.duckduckgo.com/html/"
 
     headers = {
@@ -302,4 +297,4 @@ def main():
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+    main()
