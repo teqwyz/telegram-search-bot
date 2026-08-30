@@ -2,8 +2,8 @@ name: Keep Alive Render
 
 on:
   schedule:
-    # Запуск каждые 14 минут
-    - cron: '*/14 * * * *'
+    # Запуск каждые 10 минут
+    - cron: '*/10 * * * *'
 
 jobs:
   ping:
