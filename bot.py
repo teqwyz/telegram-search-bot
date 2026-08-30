@@ -1,7 +1,6 @@
 import os
 import html
 import threading
-import asyncio
 import requests
 
 from flask import Flask
@@ -23,28 +22,23 @@ from telegram.ext import (
 )
 
 
-TOKEN = os.environ["BOT_TOKEN"]
+TOKEN = os.environ.get("BOT_TOKEN")
 
 OWNER = "@teqwyz"
 
-PORT = int(
-    os.environ.get(
-        "PORT",
-        10000
-    )
-)
+PORT = int(os.environ.get("PORT", 10000))
 
 
-# ==========================
+# =========================
 # FLASK
-# ==========================
+# =========================
 
 app = Flask(__name__)
 
 
 @app.route("/")
 def home():
-    return "Telegram Search Bot is running"
+    return "Telegram Search Bot is alive"
 
 
 
@@ -57,30 +51,29 @@ def run_flask():
 
 
 
-# ==========================
-# WEB SEARCH
-# ==========================
+# =========================
+# SEARCH
+# =========================
 
-
-def web_search(text):
+def search_web(query):
 
     try:
 
-        response = requests.get(
-            "https://www.google.com/search",
+        r = requests.get(
+            "https://html.duckduckgo.com/html/",
             params={
-                "q": text
+                "q": query
             },
             headers={
                 "User-Agent":
                 "Mozilla/5.0"
             },
-            timeout=10
+            timeout=15
         )
 
 
         soup = BeautifulSoup(
-            response.text,
+            r.text,
             "html.parser"
         )
 
@@ -88,23 +81,25 @@ def web_search(text):
         results = []
 
 
-        for link in soup.find_all("a"):
+        for item in soup.select(".result"):
 
-            href = link.get("href")
+            a = item.select_one(
+                ".result__a"
+            )
 
-            title = link.text.strip()
 
-
-            if (
-                href
-                and href.startswith("http")
-                and len(title) > 5
-            ):
+            if a:
 
                 results.append(
                     {
-                        "title": title[:80],
-                        "url": href
+                        "title":
+                        a.get_text(
+                            " ",
+                            strip=True
+                        ),
+
+                        "url":
+                        a.get("href")
                     }
                 )
 
@@ -123,10 +118,9 @@ def web_search(text):
 
 
 
-# ==========================
+# =========================
 # COMMANDS
-# ==========================
-
+# =========================
 
 async def start(
     update: Update,
@@ -135,8 +129,7 @@ async def start(
 
     await update.message.reply_text(
         "👋 Привет!\n\n"
-        "Я поисковый бот.\n\n"
-        "Напиши что найти:"
+        "Напиши запрос для поиска."
     )
 
 
@@ -152,21 +145,16 @@ async def creator(
 
 
 
-# ==========================
-# TEXT SEARCH
-# ==========================
+# =========================
+# MESSAGE
+# =========================
 
-
-async def search_handler(
+async def message_handler(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
 
     text = update.message.text.strip()
-
-
-    if not text:
-        return
 
 
     if (
@@ -186,7 +174,7 @@ async def search_handler(
 
 
 
-    context.user_data["search"] = text
+    context.user_data["query"] = text
 
 
     keyboard = [
@@ -216,7 +204,7 @@ async def search_handler(
 
 
     await update.message.reply_text(
-        "Выберите тип поиска:",
+        "Что искать?",
         reply_markup=
         InlineKeyboardMarkup(
             keyboard
@@ -225,23 +213,22 @@ async def search_handler(
 
 
 
-# ==========================
+# =========================
 # BUTTONS
-# ==========================
+# =========================
 
-
-async def buttons(
+async def button_handler(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
 
-    callback = update.callback_query
+    query = update.callback_query
 
-    await callback.answer()
+    await query.answer()
 
 
     text = context.user_data.get(
-        "search",
+        "query",
         ""
     )
 
@@ -252,9 +239,8 @@ async def buttons(
     )
 
 
-    # MUSIC
 
-    if callback.data == "music":
+    if query.data == "music":
 
 
         keyboard = [
@@ -286,204 +272,20 @@ async def buttons(
         ]
 
 
-        await callback.edit_message_text(
-
-            "🎵 Музыкальный поиск:",
-
+        await query.edit_message_text(
+            "🎵 Музыка:",
             reply_markup=
             InlineKeyboardMarkup(
                 keyboard
             )
-
         )
 
 
 
-    # VIDEO
-
-    elif callback.data == "video":
+    elif query.data == "video":
 
 
         keyboard = [
 
             [
-
-                InlineKeyboardButton(
-                    "▶️ YouTube",
-                    url=
-                    f"https://www.youtube.com/results?search_query={q}"
-                )
-
-            ]
-
-        ]
-
-
-        await callback.edit_message_text(
-
-            "▶️ Видео поиск:",
-
-            reply_markup=
-            InlineKeyboardMarkup(
-                keyboard
-            )
-
-        )
-
-
-
-    # WEB
-
-    elif callback.data == "web":
-
-
-        results = web_search(text)
-
-
-        keyboard = []
-
-
-        answer = (
-            "🔎 <b>Результаты:</b>\n\n"
-        )
-
-
-        if not results:
-
-            answer += (
-                "Ничего не найдено"
-            )
-
-
-        for i, item in enumerate(
-            results,
-            1
-        ):
-
-            answer += (
-                f"{i}. "
-                f"{html.escape(item['title'])}\n"
-            )
-
-
-            keyboard.append(
-
-                [
-
-                    InlineKeyboardButton(
-                        f"🌐 Открыть {i}",
-                        url=item["url"]
-                    )
-
-                ]
-
-            )
-
-
-        await callback.edit_message_text(
-
-            answer,
-
-            parse_mode="HTML",
-
-            reply_markup=
-            InlineKeyboardMarkup(
-                keyboard
-            )
-
-        )
-
-
-
-# ==========================
-# ERROR HANDLER
-# ==========================
-
-
-async def error_handler(
-    update,
-    context
-):
-
-    print(
-        "ERROR:",
-        context.error
-    )
-
-
-
-# ==========================
-# BOT
-# ==========================
-
-
-async def run_bot():
-
-
-    bot = (
-
-        Application
-        .builder()
-        .token(TOKEN)
-        .build()
-
-    )
-
-
-    bot.add_handler(
-        CommandHandler(
-            "start",
-            start
-        )
-    )
-
-
-    bot.add_handler(
-        MessageHandler(
-            filters.TEXT &
-            ~filters.COMMAND,
-            search_handler
-        )
-    )
-
-
-    bot.add_handler(
-        CallbackQueryHandler(
-            buttons
-        )
-    )
-
-
-    bot.add_error_handler(
-        error_handler
-    )
-
-
-    print(
-        "BOT STARTED"
-    )
-
-
-    await bot.run_polling(
-        drop_pending_updates=True
-    )
-
-
-
-# ==========================
-# START
-# ==========================
-
-
-if __name__ == "__main__":
-
-
-    threading.Thread(
-        target=run_flask,
-        daemon=True
-    ).start()
-
-
-    asyncio.run(
-        run_bot()
-    )
+                Inline
