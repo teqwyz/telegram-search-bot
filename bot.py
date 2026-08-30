@@ -1,8 +1,8 @@
 import os
 import html
-import asyncio
-import threading
 import requests
+import threading
+import asyncio
 
 from flask import Flask, request
 
@@ -23,37 +23,25 @@ from telegram.ext import (
 )
 
 
-# =========================
-# SETTINGS
-# =========================
-
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
-
-OWNER_USERNAME = "@teqwyz"
 
 PORT = int(os.environ.get("PORT", 10000))
 
-WEBHOOK_URL = (
-    "https://telegram-search-bot-g9vr.onrender.com/"
-    + BOT_TOKEN
-)
+RENDER_URL = "https://telegram-search-bot-g9vr.onrender.com"
 
-
-# =========================
-# FLASK
-# =========================
 
 app = Flask(__name__)
 
 telegram_app = None
 
-event_loop = None
 
+# =====================
+# FLASK
+# =====================
 
 
 @app.route("/")
 def home():
-
     return "Telegram Search Bot is running!"
 
 
@@ -62,64 +50,52 @@ def home():
     f"/{BOT_TOKEN}",
     methods=["POST"]
 )
-def telegram_webhook():
+def webhook():
 
-    try:
+    data = request.get_json(force=True)
 
-        data = request.get_json(
-            force=True
-        )
+    update = Update.de_json(
+        data,
+        telegram_app.bot
+    )
 
+    asyncio.run(
+        telegram_app.process_update(update)
+    )
 
-        update = Update.de_json(
-            data,
-            telegram_app.bot
-        )
-
-
-        asyncio.run_coroutine_threadsafe(
-            telegram_app.process_update(update),
-            event_loop
-        )
-
-
-        return "OK"
-
-
-    except Exception as e:
-
-        print(
-            "Webhook error:",
-            e
-        )
-
-        return "ERROR"
+    return "OK"
 
 
 
-# =========================
+# =====================
 # SEARCH
-# =========================
+# =====================
+
 
 def search_web(query):
 
     try:
 
-        response = requests.get(
-            "https://html.duckduckgo.com/html/",
+        url = "https://www.google.com/search"
+
+        headers = {
+            "User-Agent":
+            "Mozilla/5.0"
+        }
+
+
+        r = requests.get(
+            url,
             params={
                 "q": query
             },
-            headers={
-                "User-Agent":
-                "Mozilla/5.0"
-            },
-            timeout=15
+            headers=headers,
+            timeout=10
         )
 
 
         soup = BeautifulSoup(
-            response.text,
+            r.text,
             "html.parser"
         )
 
@@ -127,39 +103,44 @@ def search_web(query):
         results = []
 
 
-        for item in soup.select(".result"):
+        for a in soup.find_all("a"):
+
+            href = a.get("href")
 
 
-            link = item.select_one(
-                ".result__a"
-            )
+            if (
+                href
+                and href.startswith("http")
+            ):
+
+                title = a.get_text(
+                    " ",
+                    strip=True
+                )
 
 
-            if not link:
-                continue
+                if len(title) > 5:
+
+                    results.append(
+                        {
+                            "title": title,
+                            "url": href
+                        }
+                    )
 
 
-            results.append(
-                {
-                    "title":
-                    link.get_text(
-                        " ",
-                        strip=True
-                    ),
-
-                    "url":
-                    link.get("href")
-                }
-            )
+            if len(results) >= 5:
+                break
 
 
-        return results[:5]
+
+        return results
 
 
     except Exception as e:
 
         print(
-            "Search error:",
+            "SEARCH ERROR:",
             e
         )
 
@@ -167,9 +148,10 @@ def search_web(query):
 
 
 
-# =========================
+# =====================
 # COMMANDS
-# =========================
+# =====================
+
 
 async def start(
     update: Update,
@@ -178,8 +160,8 @@ async def start(
 
     await update.message.reply_text(
         "👋 Привет!\n\n"
-        "Я поисковый бот 🔎\n\n"
-        "Напиши запрос — я найду информацию."
+        "Я поисковый Telegram-бот.\n"
+        "Отправь мне запрос 🔎"
     )
 
 
@@ -190,35 +172,34 @@ async def creator(
 ):
 
     await update.message.reply_text(
-        f"🤖 Меня создал {OWNER_USERNAME}"
+        "🤖 Меня создал @teqwyz"
     )
 
 
 
-# =========================
-# TEXT
-# =========================
+# =====================
+# MESSAGE
+# =====================
+
 
 async def message_handler(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
 
-    if not update.message:
+    text = update.message.text
+
+
+    if not text:
         return
-
-
-    text = update.message.text.strip()
 
 
 
     if (
-        "кто твой создатель"
-        in text.lower()
-
-        or
-
         "кто тебя создал"
+        in text.lower()
+        or
+        "кто твой создатель"
         in text.lower()
     ):
 
@@ -231,20 +212,19 @@ async def message_handler(
 
 
 
-    loading = await update.message.reply_text(
-        "🔎 Ищу..."
+    msg = await update.message.reply_text(
+        "🔎 Ищу информацию..."
     )
 
 
-    results = search_web(
-        text
-    )
+    results = search_web(text)
+
 
 
     if not results:
 
-        await loading.edit_text(
-            "😕 Ничего не найдено"
+        await msg.edit_text(
+            "😕 Не смог найти результаты"
         )
 
         return
@@ -259,26 +239,26 @@ async def message_handler(
     buttons = []
 
 
+
     for i, item in enumerate(
         results,
         1
     ):
 
-
         title = html.escape(
-            item["title"]
+            item["title"][:70]
         )
 
 
         answer += (
-            f"{i}. {title}\n"
+            f"{i}. {title}\n\n"
         )
 
 
         buttons.append(
             [
                 InlineKeyboardButton(
-                    f"🔗 Открыть {i}",
+                    f"Открыть {i}",
                     url=item["url"]
                 )
             ]
@@ -286,7 +266,7 @@ async def message_handler(
 
 
 
-    await loading.edit_text(
+    await msg.edit_text(
         answer,
         parse_mode="HTML",
         reply_markup=
@@ -295,18 +275,14 @@ async def message_handler(
 
 
 
-# =========================
+# =====================
 # TELEGRAM START
-# =========================
+# =====================
 
-async def telegram_start():
 
+async def init_bot():
 
     global telegram_app
-    global event_loop
-
-
-    event_loop = asyncio.get_running_loop()
 
 
     telegram_app = (
@@ -337,58 +313,43 @@ async def telegram_start():
     await telegram_app.initialize()
 
 
-    await telegram_app.bot.delete_webhook(
-        drop_pending_updates=True
-    )
+    await telegram_app.bot.delete_webhook()
 
 
     await telegram_app.bot.set_webhook(
-        WEBHOOK_URL
+        f"{RENDER_URL}/{BOT_TOKEN}"
     )
 
 
     await telegram_app.start()
 
 
-    print(
-        "✅ Telegram bot started"
-    )
 
-
-
-def telegram_thread():
-
+def start_bot():
 
     loop = asyncio.new_event_loop()
 
-    asyncio.set_event_loop(
-        loop
-    )
-
+    asyncio.set_event_loop(loop)
 
     loop.run_until_complete(
-        telegram_start()
+        init_bot()
     )
-
 
     loop.run_forever()
 
 
 
-# =========================
+# =====================
 # RUN
-# =========================
+# =====================
+
 
 if __name__ == "__main__":
 
-
-    thread = threading.Thread(
-        target=telegram_thread,
+    threading.Thread(
+        target=start_bot,
         daemon=True
-    )
-
-
-    thread.start()
+    ).start()
 
 
     app.run(
