@@ -160,7 +160,7 @@ def music_buttons(query):
             [
                 InlineKeyboardButton(
                     "🎵 VK Музыка",
-                    url=f"https://vk.com/search?c%5Bq%5D={q}&c%5Bsection%5D=audio"
+                    url=f"https://vk.ru/audios866956338"
                 )
             ]
 
