@@ -24,13 +24,11 @@ from telegram.ext import (
 
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 
-OWNER_USERNAME = "@твой_username"
+OWNER_USERNAME = "@teqwyz"
 
 PORT = int(os.environ.get("PORT", 10000))
 
-RENDER_URL = (
-    "https://telegram-search-bot-g9vr.onrender.com"
-)
+RENDER_URL = "https://telegram-search-bot-g9vr.onrender.com"
 
 
 # =========================
@@ -52,15 +50,19 @@ def home():
     f"/{BOT_TOKEN}",
     methods=["POST"]
 )
-async def webhook():
+def webhook():
+
+    data = request.get_json(force=True)
 
     update = Update.de_json(
-        request.get_json(force=True),
+        data,
         telegram_app.bot
     )
 
-    await telegram_app.process_update(
-        update
+    import asyncio
+
+    asyncio.run(
+        telegram_app.process_update(update)
     )
 
     return "OK"
@@ -68,33 +70,33 @@ async def webhook():
 
 
 # =========================
-# ПОИСК
+# SEARCH
 # =========================
 
 def search_web(query):
 
-    url = (
-        "https://html.duckduckgo.com/html/"
-    )
+    url = "https://lite.duckduckgo.com/lite/"
+
+    headers = {
+        "User-Agent":
+        "Mozilla/5.0"
+    }
 
 
     try:
 
-        response = requests.get(
+        r = requests.post(
             url,
-            params={
+            data={
                 "q": query
             },
-            headers={
-                "User-Agent":
-                "Mozilla/5.0"
-            },
+            headers=headers,
             timeout=20
         )
 
 
         soup = BeautifulSoup(
-            response.text,
+            r.text,
             "html.parser"
         )
 
@@ -102,31 +104,28 @@ def search_web(query):
         results = []
 
 
-        for item in soup.select(
-            ".result"
+        for link in soup.find_all(
+            "a"
         ):
 
-            link = item.select_one(
-                ".result__a"
-            )
+            href = link.get("href")
+
+            title = link.text.strip()
 
 
-            if not link:
-                continue
+            if (
+                href
+                and
+                href.startswith("http")
+                and title
+            ):
 
-
-            results.append(
-                {
-                    "title":
-                    link.get_text(
-                        " ",
-                        strip=True
-                    ),
-
-                    "url":
-                    link.get("href")
-                }
-            )
+                results.append(
+                    {
+                        "title": title,
+                        "url": href
+                    }
+                )
 
 
         return results[:5]
@@ -135,7 +134,7 @@ def search_web(query):
     except Exception as e:
 
         print(
-            "Search error:",
+            "SEARCH ERROR:",
             e
         )
 
@@ -144,8 +143,9 @@ def search_web(query):
 
 
 # =========================
-# START
+# COMMANDS
 # =========================
+
 
 async def start(
     update: Update,
@@ -155,14 +155,10 @@ async def start(
     await update.message.reply_text(
         "👋 Привет!\n\n"
         "Я поисковый бот.\n\n"
-        "Отправь запрос."
+        "Отправь запрос и я найду ссылки."
     )
 
 
-
-# =========================
-# СОЗДАТЕЛЬ
-# =========================
 
 async def creator(
     update: Update,
@@ -170,14 +166,15 @@ async def creator(
 ):
 
     await update.message.reply_text(
-        f"🤖 Меня создал {@teqwyz}"
+        f"🤖 Меня создал {OWNER_USERNAME}"
     )
 
 
 
 # =========================
-# СООБЩЕНИЯ
+# MESSAGE
 # =========================
+
 
 async def message_handler(
     update: Update,
@@ -187,12 +184,18 @@ async def message_handler(
     text = update.message.text.strip()
 
 
-    if (
-        "кто твой создатель"
-        in text.lower()
-        or
-        "кто тебя создал"
-        in text.lower()
+    if not text:
+        return
+
+
+
+    if any(
+        word in text.lower()
+        for word in [
+            "кто твой создатель",
+            "кто тебя создал",
+            "кто автор"
+        ]
     ):
 
         await creator(
@@ -217,7 +220,8 @@ async def message_handler(
     if not results:
 
         await msg.edit_text(
-            "😕 Ничего не найдено"
+            "😕 Ничего не найдено.\n"
+            "Попробуй изменить запрос."
         )
 
         return
@@ -225,7 +229,6 @@ async def message_handler(
 
 
     buttons = []
-
 
     answer = (
         "🔎 <b>Результаты:</b>\n\n"
@@ -243,7 +246,7 @@ async def message_handler(
 
 
         answer += (
-            f"{i}. {title}\n"
+            f"{i}. {title}\n\n"
         )
 
 
@@ -267,10 +270,11 @@ async def message_handler(
 
 
 # =========================
-# ЗАПУСК
+# START BOT
 # =========================
 
-async def setup():
+
+async def init_bot():
 
     global telegram_app
 
@@ -292,6 +296,14 @@ async def setup():
 
 
     telegram_app.add_handler(
+        CommandHandler(
+            "creator",
+            creator
+        )
+    )
+
+
+    telegram_app.add_handler(
         MessageHandler(
             filters.TEXT &
             ~filters.COMMAND,
@@ -307,7 +319,6 @@ async def setup():
 
 
     await telegram_app.bot.set_webhook(
-        url=
         f"{RENDER_URL}/{BOT_TOKEN}"
     )
 
@@ -320,8 +331,9 @@ def run():
 
     import asyncio
 
+
     asyncio.run(
-        setup()
+        init_bot()
     )
 
 
@@ -333,5 +345,4 @@ def run():
 
 
 if __name__ == "__main__":
-
     run()
