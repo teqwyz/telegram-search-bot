@@ -31,9 +31,11 @@ from database import (
     create_user,
     add_history,
     get_history,
-    add_favorite,
-    get_favorites
+    get_favorites,
+    clear_history
 )
+
+
 
 
 
@@ -54,6 +56,8 @@ OWNER = "@teqwyz"
 
 
 
+
+
 # =====================
 # FLASK
 # =====================
@@ -68,6 +72,8 @@ def home():
 
 
 
+
+
 def run_flask():
 
     app.run(
@@ -79,11 +85,33 @@ def run_flask():
 
 
 
+
+
 # =====================
 # ПАМЯТЬ РЕЖИМОВ
 # =====================
 
 users = {}
+
+
+
+
+
+# =====================
+# СОЗДАНИЕ ПРОФИЛЯ
+# =====================
+
+def get_user(user_id):
+
+    if user_id not in users:
+
+        users[user_id] = {
+            "mode": "web"
+        }
+
+    return users[user_id]
+
+
 
 
 
@@ -100,19 +128,16 @@ async def start(
 
     create_user(user_id)
 
-
     users[user_id] = {
-
         "mode": "web"
-
     }
 
 
     await update.message.reply_text(
 
         "🤖 Добро пожаловать!\n\n"
-        "Я Smart Search Bot 🔎\n"
-        "Умею искать без ИИ:\n\n"
+        "Я Smart Search Bot 🔎\n\n"
+        "Умею искать:\n\n"
         "🌐 Интернет\n"
         "🎵 Музыка\n"
         "🎬 Видео\n"
@@ -124,6 +149,8 @@ async def start(
         reply_markup=main_menu()
 
     )
+
+
 
 
 
@@ -140,14 +167,18 @@ async def about(
 
         "🤖 Smart Search Bot\n\n"
         f"Создатель: {OWNER}\n\n"
-        "Функции:\n"
-        "🔎 умный поиск\n"
-        "📚 база знаний\n"
-        "⭐ история\n"
-        "⚙ настройки\n\n"
-        "Работает без нейросетей."
+
+        "Возможности:\n"
+        "🔎 Умный поиск без ИИ\n"
+        "📊 История запросов\n"
+        "⭐ Избранное\n"
+        "⚙ Настройки\n\n"
+
+        "Версия: 3.0"
 
     )
+
+
 
 
 
@@ -164,13 +195,15 @@ async def help_command(
 
         "📌 Команды:\n\n"
 
-        "/start — главное меню\n"
+        "/start — меню\n"
         "/help — помощь\n"
         "/about — информация\n"
-        "/history — история поиска\n"
+        "/history — история\n"
         "/favorites — избранное"
 
     )
+
+
 
 
 
@@ -185,18 +218,16 @@ async def history(
 
     user_id = update.effective_user.id
 
-
     items = get_history(user_id)
 
 
     if not items:
 
         await update.message.reply_text(
-            "📊 История пуста"
+            "📊 История пустая"
         )
 
         return
-
 
 
     text = "📊 Последние запросы:\n\n"
@@ -211,6 +242,8 @@ async def history(
 
 
 
+
+
 # =====================
 # ИЗБРАННОЕ
 # =====================
@@ -221,7 +254,6 @@ async def favorites(
 ):
 
     user_id = update.effective_user.id
-
 
     items = get_favorites(user_id)
 
@@ -235,7 +267,6 @@ async def favorites(
         return
 
 
-
     text = "⭐ Избранное:\n\n"
 
 
@@ -244,13 +275,14 @@ async def favorites(
         text += f"• {item}\n"
 
 
-
     await update.message.reply_text(text)
 
 
 
+
+
 # =====================
-# КНОПКИ
+# CALLBACK КНОПКИ
 # =====================
 
 async def buttons(
@@ -262,7 +294,6 @@ async def buttons(
 
 
     if not query:
-
         return
 
 
@@ -271,25 +302,22 @@ async def buttons(
 
     user_id = query.from_user.id
 
-
     create_user(user_id)
+
+    user = get_user(user_id)
 
 
     data = query.data
 
 
 
-    if user_id not in users:
-
-        users[user_id] = {
-            "mode": "web"
-        }
 
 
+    # Главное меню
 
     if data == "menu":
 
-        users[user_id]["mode"] = "web"
+        user["mode"] = "web"
 
 
         await query.edit_message_text(
@@ -303,6 +331,44 @@ async def buttons(
         return
 
 
+
+
+
+    # История
+
+    if data == "history":
+
+        items = get_history(user_id)
+
+
+        if not items:
+
+            text = "📊 История пустая"
+
+        else:
+
+            text = "📊 История:\n\n"
+
+            for i,item in enumerate(items,1):
+
+                text += f"{i}. {item}\n"
+
+
+        await query.edit_message_text(
+
+            text,
+
+            reply_markup=main_menu()
+
+        )
+
+        return
+
+
+
+
+
+    # Настройки
 
     if data == "settings":
 
@@ -318,6 +384,31 @@ async def buttons(
 
 
 
+
+
+    # Очистка истории
+
+    if data == "clear_history":
+
+        clear_history(user_id)
+
+
+        await query.edit_message_text(
+
+            "🧹 История очищена",
+
+            reply_markup=main_menu()
+
+        )
+
+        return
+
+
+
+
+
+    # Выбор режима
+
     if data in [
 
         "web",
@@ -329,20 +420,20 @@ async def buttons(
 
     ]:
 
-        users[user_id]["mode"] = data
+        user["mode"] = data
 
 
         await query.edit_message_text(
 
-            f"✅ Режим выбран:\n\n"
+            f"✅ Выбран режим:\n\n"
             f"{data}\n\n"
-            "Отправь запрос.",
+            "Отправь запрос",
 
             reply_markup=main_menu()
 
         )
 
-
+        return
 
 # =====================
 # СООБЩЕНИЯ
@@ -354,16 +445,13 @@ async def message(
 ):
 
     if not update.message:
-
         return
-
 
 
     text = update.message.text
 
 
     if not text:
-
         return
 
 
@@ -374,18 +462,14 @@ async def message(
     create_user(user_id)
 
 
+    user = get_user(user_id)
 
-    if user_id not in users:
 
-        users[user_id] = {
-            "mode": "web"
-        }
+    mode = user["mode"]
 
 
 
-    mode = users[user_id]["mode"]
-
-
+    # сохраняем историю
 
     add_history(
         user_id,
@@ -393,7 +477,23 @@ async def message(
     )
 
 
+
+    # умный анализ запроса
+
     result = smart_search(text)
+
+
+
+    category = result["category"]
+
+
+
+    # если выбран обычный интернет,
+    # разрешаем автоопределение
+
+    if mode == "web":
+
+        mode = category
 
 
 
@@ -401,37 +501,67 @@ async def message(
 
 
 
+    keyboard = None
+
+
+
+    # =====================
+    # ВЫБОР ПОИСКА
+    # =====================
+
+
     if mode == "web":
 
-        keyboard = web_buttons(query)
+        keyboard = web_buttons(
+            query
+        )
+
+        title = "🌐 Интернет"
 
 
     elif mode == "music":
 
-        keyboard = music_buttons(query)
+        keyboard = music_buttons(
+            query
+        )
+
+        title = "🎵 Музыка"
 
 
     elif mode == "video":
 
-        keyboard = video_buttons(query)
+        keyboard = video_buttons(
+            query
+        )
+
+        title = "🎬 Видео"
 
 
     elif mode == "shop":
 
-        keyboard = shop_buttons(query)
+        keyboard = shop_buttons(
+            query
+        )
+
+        title = "🛒 Покупки"
 
 
     elif mode == "maps":
 
-        keyboard = maps_buttons(query)
+        keyboard = maps_buttons(
+            query
+        )
+
+        title = "🗺 Карты"
 
 
-    else:
+
+    elif mode == "wiki":
 
         await update.message.reply_text(
 
             "📚 Найдено:\n\n"
-            + result["text"]
+            f"{result['text']}"
 
         )
 
@@ -439,14 +569,28 @@ async def message(
 
 
 
+    else:
+
+        keyboard = web_buttons(
+            query
+        )
+
+        title = "🌐 Интернет"
+
+
+
+
     await update.message.reply_text(
 
-        f"{result['title']}\n\n"
+        f"{title}\n\n"
+        f"🔎 Запрос:\n{query}\n\n"
         "Выбери сервис:",
 
         reply_markup=keyboard
 
     )
+
+
 
 
 
@@ -466,8 +610,10 @@ async def error_handler(
 
 
 
+
+
 # =====================
-# RUN
+# ЗАПУСК
 # =====================
 
 def run():
@@ -481,6 +627,8 @@ def run():
 
 
 
+    # Flask для Render
+
     threading.Thread(
 
         target=run_flask,
@@ -488,6 +636,8 @@ def run():
         daemon=True
 
     ).start()
+
+
 
 
 
@@ -502,72 +652,126 @@ def run():
 
 
 
+
+
+    # =====================
+    # КОМАНДЫ
+    # =====================
+
+
     bot.add_handler(
+
         CommandHandler(
             "start",
             start
         )
+
     )
 
 
     bot.add_handler(
+
         CommandHandler(
             "help",
             help_command
         )
+
     )
 
 
     bot.add_handler(
+
         CommandHandler(
             "about",
             about
         )
+
     )
 
 
     bot.add_handler(
+
         CommandHandler(
             "history",
             history
         )
+
     )
 
 
     bot.add_handler(
+
         CommandHandler(
             "favorites",
             favorites
         )
+
     )
 
 
+
+
+
+    # =====================
+    # КНОПКИ
+    # =====================
+
+
     bot.add_handler(
+
         CallbackQueryHandler(
             buttons
         )
+
     )
+
+
+
+
+
+    # =====================
+    # ТЕКСТ
+    # =====================
 
 
     bot.add_handler(
+
         MessageHandler(
-            filters.TEXT & ~filters.COMMAND,
+
+            filters.TEXT &
+            ~filters.COMMAND,
+
             message
+
         )
+
     )
+
+
+
 
 
     bot.add_error_handler(
+
         error_handler
+
     )
+
+
+
 
 
     print(
-        "✅ BOT STARTED"
+        "✅ SMART SEARCH BOT STARTED"
     )
 
 
+
+
+
     bot.run_polling()
+
+
 
 
 
@@ -584,6 +788,11 @@ from telegram import (
     InlineKeyboardMarkup
 )
 
+from urllib.parse import quote
+
+
+
+
 
 # =====================
 # ГЛАВНОЕ МЕНЮ
@@ -592,6 +801,7 @@ from telegram import (
 def main_menu():
 
     return InlineKeyboardMarkup([
+
 
         [
 
@@ -606,6 +816,7 @@ def main_menu():
             )
 
         ],
+
 
 
         [
@@ -623,6 +834,7 @@ def main_menu():
         ],
 
 
+
         [
 
             InlineKeyboardButton(
@@ -636,6 +848,7 @@ def main_menu():
             )
 
         ],
+
 
 
         [
@@ -658,27 +871,6 @@ def main_menu():
 
 
 
-# =====================
-# НАЗАД
-# =====================
-
-def back_button():
-
-    return InlineKeyboardMarkup([
-
-        [
-
-            InlineKeyboardButton(
-                "⬅ Главное меню",
-                callback_data="menu"
-            )
-
-        ]
-
-    ])
-
-
-
 
 
 # =====================
@@ -689,6 +881,7 @@ def settings_menu():
 
     return InlineKeyboardMarkup([
 
+
         [
 
             InlineKeyboardButton(
@@ -698,6 +891,8 @@ def settings_menu():
 
         ],
 
+
+
         [
 
             InlineKeyboardButton(
@@ -706,6 +901,8 @@ def settings_menu():
             )
 
         ],
+
+
 
         [
 
@@ -717,6 +914,34 @@ def settings_menu():
         ]
 
     ])
+
+
+
+
+
+
+
+# =====================
+# НАЗАД
+# =====================
+
+def back_button():
+
+    return InlineKeyboardMarkup([
+
+
+        [
+
+            InlineKeyboardButton(
+                "⬅ Главное меню",
+                callback_data="menu"
+            )
+
+        ]
+
+    ])
+
+
 
 
 
@@ -728,34 +953,44 @@ def settings_menu():
 
 def web_buttons(query):
 
+    q = quote(query)
+
+
     return InlineKeyboardMarkup([
+
 
         [
 
             InlineKeyboardButton(
                 "🔎 Google",
-                url=f"https://www.google.com/search?q={query}"
+                url=f"https://www.google.com/search?q={q}"
             )
 
         ],
+
+
 
         [
 
             InlineKeyboardButton(
                 "🔎 Яндекс",
-                url=f"https://yandex.ru/search/?text={query}"
+                url=f"https://yandex.ru/search/?text={q}"
             )
 
         ],
+
+
 
         [
 
             InlineKeyboardButton(
                 "🔎 Bing",
-                url=f"https://www.bing.com/search?q={query}"
+                url=f"https://www.bing.com/search?q={q}"
             )
 
         ],
+
+
 
         [
 
@@ -767,6 +1002,8 @@ def web_buttons(query):
         ]
 
     ])
+
+
 
 
 
@@ -778,34 +1015,44 @@ def web_buttons(query):
 
 def music_buttons(query):
 
+    q = quote(query)
+
+
     return InlineKeyboardMarkup([
+
 
         [
 
             InlineKeyboardButton(
                 "🎵 Spotify",
-                url=f"https://open.spotify.com/search/{query}"
+                url=f"https://open.spotify.com/search/{q}"
             )
 
         ],
+
+
 
         [
 
             InlineKeyboardButton(
                 "🎵 Яндекс Музыка",
-                url=f"https://music.yandex.ru/search?text={query}"
+                url=f"https://music.yandex.ru/search?text={q}"
             )
 
         ],
+
+
 
         [
 
             InlineKeyboardButton(
                 "🎵 VK Музыка",
-                url=f"https://vk.com/audio?section=search&q={query}"
+                url=f"https://vk.com/audio?section=search&q={q}"
             )
 
         ],
+
+
 
         [
 
@@ -817,6 +1064,8 @@ def music_buttons(query):
         ]
 
     ])
+
+
 
 
 
@@ -828,34 +1077,44 @@ def music_buttons(query):
 
 def video_buttons(query):
 
+    q = quote(query)
+
+
     return InlineKeyboardMarkup([
+
 
         [
 
             InlineKeyboardButton(
                 "▶ YouTube",
-                url=f"https://www.youtube.com/results?search_query={query}"
+                url=f"https://www.youtube.com/results?search_query={q}"
             )
 
         ],
+
+
 
         [
 
             InlineKeyboardButton(
                 "▶ VK Видео",
-                url=f"https://vk.com/video?q={query}"
+                url=f"https://vk.com/video?q={q}"
             )
 
         ],
+
+
 
         [
 
             InlineKeyboardButton(
                 "▶ Rutube",
-                url=f"https://rutube.ru/search/?query={query}"
+                url=f"https://rutube.ru/search/?query={q}"
             )
 
         ],
+
+
 
         [
 
@@ -867,6 +1126,8 @@ def video_buttons(query):
         ]
 
     ])
+
+
 
 
 
@@ -878,34 +1139,44 @@ def video_buttons(query):
 
 def shop_buttons(query):
 
+    q = quote(query)
+
+
     return InlineKeyboardMarkup([
+
 
         [
 
             InlineKeyboardButton(
                 "🛒 Ozon",
-                url=f"https://www.ozon.ru/search/?text={query}"
+                url=f"https://www.ozon.ru/search/?text={q}"
             )
 
         ],
+
+
 
         [
 
             InlineKeyboardButton(
                 "🛒 Wildberries",
-                url=f"https://www.wildberries.ru/catalog/0/search.aspx?search={query}"
+                url=f"https://www.wildberries.ru/catalog/0/search.aspx?search={q}"
             )
 
         ],
+
+
 
         [
 
             InlineKeyboardButton(
                 "🛒 Яндекс Маркет",
-                url=f"https://market.yandex.ru/search?text={query}"
+                url=f"https://market.yandex.ru/search?text={q}"
             )
 
         ],
+
+
 
         [
 
@@ -922,40 +1193,52 @@ def shop_buttons(query):
 
 
 
+
+
 # =====================
 # КАРТЫ
 # =====================
 
 def maps_buttons(query):
 
+    q = quote(query)
+
+
     return InlineKeyboardMarkup([
+
 
         [
 
             InlineKeyboardButton(
                 "🗺 Google Maps",
-                url=f"https://www.google.com/maps/search/?api=1&query={query}"
+                url=f"https://www.google.com/maps/search/?api=1&query={q}"
             )
 
         ],
+
+
 
         [
 
             InlineKeyboardButton(
                 "🗺 Яндекс Карты",
-                url=f"https://yandex.ru/maps/?text={query}"
+                url=f"https://yandex.ru/maps/?text={q}"
             )
 
         ],
+
+
 
         [
 
             InlineKeyboardButton(
                 "🗺 2ГИС",
-                url=f"https://2gis.ru/search/{query}"
+                url=f"https://2gis.ru/search/{q}"
             )
 
         ],
+
+
 
         [
 
@@ -991,7 +1274,6 @@ CATEGORIES = {
         "певец",
         "певица",
         "слушать",
-        "текст песни",
         "lyrics",
         "song",
         "spotify"
@@ -1005,7 +1287,6 @@ CATEGORIES = {
         "фильм",
         "кино",
         "сериал",
-        "мультфильм",
         "трейлер",
         "ютуб",
         "youtube",
@@ -1032,7 +1313,6 @@ CATEGORIES = {
         "вб",
         "iphone",
         "айфон",
-        "ноутбук",
         "телефон"
 
     ],
@@ -1043,7 +1323,6 @@ CATEGORIES = {
 
         "адрес",
         "где находится",
-        "найти",
         "карта",
         "улица",
         "метро",
@@ -1080,14 +1359,17 @@ CATEGORIES = {
 
 def normalize(text):
 
-    return (
+    if not text:
+        return ""
 
+    return (
         text
         .lower()
         .replace("ё", "е")
         .strip()
-
     )
+
+
 
 
 
@@ -1116,9 +1398,7 @@ def detect_category(text):
 
     for category, words in CATEGORIES.items():
 
-
         for word in words:
-
 
             if word in text:
 
@@ -1128,12 +1408,11 @@ def detect_category(text):
 
 
 
+
     best = max(
         scores,
         key=scores.get
     )
-
-
 
 
 
@@ -1149,47 +1428,78 @@ def detect_category(text):
 
 
 
+
+
 # =====================
 # НАЗВАНИЕ
 # =====================
 
 def category_title(category):
 
-
     titles = {
 
 
         "web":
-            "🌐 Интернет",
+        "🌐 Интернет",
 
 
         "music":
-            "🎵 Музыка",
+        "🎵 Музыка",
 
 
         "video":
-            "🎬 Видео",
+        "🎬 Видео",
 
 
         "shop":
-            "🛒 Покупки",
+        "🛒 Покупки",
 
 
         "maps":
-            "🗺 Карты",
+        "🗺 Карты",
 
 
         "wiki":
-            "📚 Знания"
+        "📚 Знания"
 
     }
 
 
     return titles.get(
-
         category,
-
         "🌐 Интернет"
+    )
+
+
+
+
+
+
+
+# =====================
+# ОТВЕТ
+# =====================
+
+def make_answer(text, category):
+
+
+    if category == "wiki":
+
+        return (
+
+            "📚 Поиск знаний\n\n"
+            f"Запрос:\n{text}\n\n"
+            "Я нашёл направление поиска."
+
+        )
+
+
+
+    return (
+
+        f"Категория: "
+        f"{category_title(category)}\n\n"
+        f"Запрос:\n{text}"
 
     )
 
@@ -1197,11 +1507,19 @@ def category_title(category):
 
 
 
+
+
 # =====================
-# АНАЛИЗ ЗАПРОСА
+# ОСНОВНОЙ ПОИСК
 # =====================
 
 def smart_search(text):
+
+
+    if not text:
+
+        text = "пустой запрос"
+
 
 
     category = detect_category(text)
@@ -1211,13 +1529,19 @@ def smart_search(text):
     return {
 
 
-        "query": text,
+        "query":
+            text,
 
 
-        "category": category,
+
+        "category":
+            category,
 
 
-        "title": category_title(category),
+
+        "title":
+            category_title(category),
+
 
 
         "text":
@@ -1225,423 +1549,5 @@ def smart_search(text):
                 text,
                 category
             )
-
-    }
-
-
-
-
-
-# =====================
-# ОТВЕТ ДЛЯ WIKI
-# =====================
-
-def make_answer(
-    text,
-    category
-):
-
-
-    if category == "wiki":
-
-        return (
-
-            "Я определил запрос как "
-            "запрос знаний.\n\n"
-            f"🔎 Поиск информации:\n{text}"
-
-        )
-
-
-
-    return (
-
-        "Категория:\n"
-        f"{category_title(category)}\n\n"
-        f"Запрос: {text}"
-
-    )
-
-import os
-import json
-from datetime import datetime
-
-
-
-# =====================
-# НАСТРОЙКИ
-# =====================
-
-DATA_FOLDER = "data"
-
-DATABASE_FILE = os.path.join(
-    DATA_FOLDER,
-    "users.json"
-)
-
-
-
-
-
-# =====================
-# СОЗДАНИЕ БАЗЫ
-# =====================
-
-def init_database():
-
-    if not os.path.exists(DATA_FOLDER):
-
-        os.makedirs(
-            DATA_FOLDER
-        )
-
-
-    if not os.path.exists(DATABASE_FILE):
-
-        with open(
-            DATABASE_FILE,
-            "w",
-            encoding="utf-8"
-        ) as file:
-
-
-            json.dump(
-
-                {},
-
-                file,
-
-                ensure_ascii=False,
-
-                indent=4
-
-            )
-
-
-
-
-
-# =====================
-# ЗАГРУЗКА
-# =====================
-
-def load_database():
-
-    init_database()
-
-
-    with open(
-        DATABASE_FILE,
-        "r",
-        encoding="utf-8"
-    ) as file:
-
-
-        return json.load(file)
-
-
-
-
-
-# =====================
-# СОХРАНЕНИЕ
-# =====================
-
-def save_database(data):
-
-    with open(
-        DATABASE_FILE,
-        "w",
-        encoding="utf-8"
-    ) as file:
-
-
-        json.dump(
-
-            data,
-
-            file,
-
-            ensure_ascii=False,
-
-            indent=4
-
-        )
-
-
-
-
-
-# =====================
-# СОЗДАТЬ ПОЛЬЗОВАТЕЛЯ
-# =====================
-
-def create_user(user_id):
-
-    data = load_database()
-
-
-    user_id = str(user_id)
-
-
-
-    if user_id not in data:
-
-
-        data[user_id] = {
-
-
-            "history": [],
-
-
-            "favorites": [],
-
-
-            "created": str(
-                datetime.now()
-            )
-
-
-        }
-
-
-        save_database(data)
-
-
-
-
-
-# =====================
-# ДОБАВИТЬ ИСТОРИЮ
-# =====================
-
-def add_history(
-    user_id,
-    query
-):
-
-    create_user(
-        user_id
-    )
-
-
-    data = load_database()
-
-
-    user_id = str(user_id)
-
-
-
-    history = data[user_id]["history"]
-
-
-
-    if query in history:
-
-        history.remove(query)
-
-
-
-    history.insert(
-        0,
-        query
-    )
-
-
-
-    data[user_id]["history"] = history[:30]
-
-
-
-    save_database(data)
-
-
-
-
-
-# =====================
-# ПОЛУЧИТЬ ИСТОРИЮ
-# =====================
-
-def get_history(user_id):
-
-    data = load_database()
-
-
-    user_id = str(user_id)
-
-
-
-    if user_id not in data:
-
-        return []
-
-
-
-    return data[user_id].get(
-
-        "history",
-
-        []
-
-    )
-
-
-
-
-
-# =====================
-# ДОБАВИТЬ В ИЗБРАННОЕ
-# =====================
-
-def add_favorite(
-    user_id,
-    query
-):
-
-    create_user(
-        user_id
-    )
-
-
-    data = load_database()
-
-
-    user_id = str(user_id)
-
-
-
-    favorites = data[user_id]["favorites"]
-
-
-
-    if query not in favorites:
-
-
-        favorites.append(
-            query
-        )
-
-
-
-    data[user_id]["favorites"] = favorites[:50]
-
-
-
-    save_database(data)
-
-
-
-
-
-# =====================
-# ПОЛУЧИТЬ ИЗБРАННОЕ
-# =====================
-
-def get_favorites(user_id):
-
-    data = load_database()
-
-
-    user_id = str(user_id)
-
-
-
-    if user_id not in data:
-
-        return []
-
-
-
-    return data[user_id].get(
-
-        "favorites",
-
-        []
-
-    )
-
-
-
-
-
-# =====================
-# УДАЛИТЬ ИЗ ИЗБРАННОГО
-# =====================
-
-def remove_favorite(
-    user_id,
-    query
-):
-
-    data = load_database()
-
-
-    user_id = str(user_id)
-
-
-
-    if user_id in data:
-
-
-        favorites = data[user_id]["favorites"]
-
-
-
-        if query in favorites:
-
-
-            favorites.remove(
-                query
-            )
-
-
-            save_database(data)
-
-
-
-
-
-# =====================
-# СТАТИСТИКА
-# =====================
-
-def get_stats(user_id):
-
-    data = load_database()
-
-
-    user_id = str(user_id)
-
-
-
-    if user_id not in data:
-
-        return {
-
-            "history": 0,
-
-            "favorites": 0
-
-        }
-
-
-
-    return {
-
-
-        "history":
-
-            len(
-                data[user_id]["history"]
-            ),
-
-
-        "favorites":
-
-            len(
-                data[user_id]["favorites"]
-            )
-
 
     }
