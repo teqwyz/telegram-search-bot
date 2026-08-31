@@ -4,44 +4,22 @@ import threading
 import requests
 
 from flask import Flask
-
-from telegram import (
-    Update,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup
-)
-
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
     CommandHandler,
     MessageHandler,
     CallbackQueryHandler,
     ContextTypes,
-    filters
+    filters,
 )
 
-
-# =====================
-# НАСТРОЙКИ
-# =====================
-
-BOT_TOKEN = os.environ.get("BOT_TOKEN")
-
-PORT = int(
-    os.environ.get(
-        "PORT",
-        10000
-    )
-)
-
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+PORT = int(os.getenv("PORT", "10000"))
 OWNER = "@teqwyz"
 
-
-# =====================
-# FLASK
-# =====================
-
 app = Flask(__name__)
+modes = {}
 
 
 @app.route("/")
@@ -50,626 +28,223 @@ def home():
 
 
 def run_flask():
-    app.run(
-        host="0.0.0.0",
-        port=PORT
-    )
+    app.run(host="0.0.0.0", port=PORT, debug=False, use_reloader=False)
 
 
-# =====================
-# РЕЖИМЫ
-# =====================
-
-modes = {}
+def encode(text: str) -> str:
+    return requests.utils.quote(text, safe="")
 
 
-# =====================
-# КОДИРОВАНИЕ URL
-# =====================
-
-def encode(text):
-    return requests.utils.quote(
-        text,
-        safe=""
-    )
-
-
-# =====================
-# ВЕБ-ПОИСК
-# =====================
-
-def web_search(query):
-
-    results = []
-
+def web_search(query: str):
+    """Search DuckDuckGo Instant Answer API.
+    If it has no useful results, return a direct Google search button.
+    """
     try:
-
         response = requests.get(
             "https://api.duckduckgo.com/",
             params={
                 "q": query,
                 "format": "json",
                 "no_html": 1,
-                "skip_disambig": 1
+                "skip_disambig": 1,
             },
-            headers={
-                "User-Agent": "Mozilla/5.0"
-            },
-            timeout=10
+            headers={"User-Agent": "Mozilla/5.0 (Telegram Search Bot)"},
+            timeout=10,
         )
-
         response.raise_for_status()
-
         data = response.json()
+        results = []
 
-        # Основной результат
+        heading = data.get("Heading")
+        abstract_url = data.get("AbstractURL")
+        if heading and abstract_url:
+            results.append((heading, abstract_url))
 
-        if (
-            data.get("Heading")
-            and data.get("AbstractURL")
-        ):
+        def collect(items):
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                if item.get("FirstURL") and item.get("Text"):
+                    results.append((item["Text"], item["FirstURL"]))
+                nested = item.get("Topics")
+                if isinstance(nested, list):
+                    collect(nested)
 
-            results.append(
-                (
-                    data["Heading"],
-                    data["AbstractURL"]
-                )
-            )
+        collect(data.get("RelatedTopics", []))
 
-        # Связанные результаты
+        unique = []
+        seen = set()
+        for title, url in results:
+            if url not in seen:
+                seen.add(url)
+                unique.append((title, url))
+            if len(unique) >= 5:
+                break
 
-        for item in data.get(
-            "RelatedTopics",
-            []
-        ):
+        if unique:
+            return unique
+    except Exception as exc:
+        print("WEB SEARCH ERROR:", repr(exc))
 
-            if not isinstance(
-                item,
-                dict
-            ):
-                continue
+    # DuckDuckGo's instant-answer endpoint may return no links for many queries.
+    # Give the user a guaranteed web-search destination instead of "nothing found".
+    return [("Открыть поиск Google", f"https://www.google.com/search?q={encode(query)}")]
 
-            title = item.get(
-                "Text"
-            )
-
-            url = item.get(
-                "FirstURL"
-            )
-
-            if title and url:
-
-                results.append(
-                    (
-                        title,
-                        url
-                    )
-                )
-
-        if results:
-
-            return results[:5]
-
-    except Exception as e:
-
-        print(
-            "WEB SEARCH ERROR:",
-            repr(e)
-        )
-
-    # Запасной вариант
-
-    return [
-        (
-            "🔎 Открыть поиск Google",
-            "https://www.google.com/search?q="
-            + encode(query)
-        )
-    ]
-
-
-# =====================
-# ГЛАВНОЕ МЕНЮ
-# =====================
 
 def main_menu():
-
-    return InlineKeyboardMarkup(
-        [
-
-            [
-                InlineKeyboardButton(
-                    "🌐 Веб",
-                    callback_data="web"
-                )
-            ],
-
-            [
-                InlineKeyboardButton(
-                    "🎵 Музыка",
-                    callback_data="music"
-                )
-            ],
-
-            [
-                InlineKeyboardButton(
-                    "🎬 Видео",
-                    callback_data="video"
-                )
-            ],
-
-            [
-                InlineKeyboardButton(
-                    "📰 Новости",
-                    callback_data="news"
-                )
-            ],
-
-            [
-                InlineKeyboardButton(
-                    "📚 Википедия",
-                    callback_data="wiki"
-                )
-            ]
-
-        ]
-    )
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🌐 Веб поиск", callback_data="web")],
+        [InlineKeyboardButton("🎵 Музыка", callback_data="music")],
+        [InlineKeyboardButton("🎬 Видео", callback_data="video")],
+    ])
 
 
-# =====================
-# МУЗЫКА
-# =====================
-
-def music_menu(text):
-
+def music_menu(text: str):
     query = encode(text)
-
-    return InlineKeyboardMarkup(
-        [
-
-            [
-                InlineKeyboardButton(
-                    "🎵 Spotify",
-                    url=(
-                        "https://open.spotify.com/search/"
-                        + query
-                    )
-                )
-            ],
-
-            [
-                InlineKeyboardButton(
-                    "🎵 Яндекс Музыка",
-                    url=(
-                        "https://music.yandex.ru/search?text="
-                        + query
-                    )
-                ],
-
-            [
-                InlineKeyboardButton(
-                    "🎵 VK Музыка",
-                    url=(
-                        "https://vk.com/search?"
-                        "c%5Bsection%5D=audio&"
-                        "c%5Bq%5D="
-                        + query
-                    )
-                )
-            ]
-
-        ]
-    )
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(
+            "🎵 Spotify",
+            url=f"https://open.spotify.com/search/{query}",
+        )],
+        [InlineKeyboardButton(
+            "🎵 Яндекс Музыка",
+            url=f"https://music.yandex.ru/search?text={query}",
+        )],
+        [InlineKeyboardButton(
+            "🎵 VK Музыка",
+            # VK's general search is more reliable than the old audio URL.
+            url=f"https://vk.com/search?section=audio&q={query}",
+        )],
+    ])
 
 
-# =====================
-# ВИДЕО
-# =====================
-
-def video_menu(text):
-
+def video_menu(text: str):
     query = encode(text)
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(
+            "📺 YouTube",
+            url=f"https://www.youtube.com/results?search_query={query}",
+        )],
+        [InlineKeyboardButton(
+            "📺 VK Видео",
+            url=f"https://vk.com/video?q={query}",
+        )],
+        [InlineKeyboardButton(
+            "📺 Rutube",
+            url=f"https://rutube.ru/search/?query={query}",
+        )],
+    ])
 
-    return InlineKeyboardMarkup(
-        [
 
-            [
-                InlineKeyboardButton(
-                    "📺 YouTube",
-                    url=(
-                        "https://www.youtube.com/results?"
-                        "search_query="
-                        + query
-                    )
-                )
-            ],
-
-            [
-                InlineKeyboardButton(
-                    "📺 VK Видео",
-                    url=(
-                        "https://vkvideo.ru/"
-                        "?q="
-                        + query
-                    )
-                )
-            ],
-
-            [
-                InlineKeyboardButton(
-                    "📺 Rutube",
-                    url=(
-                        "https://rutube.ru/search/"
-                        "?query="
-                        + query
-                    )
-                )
-            ]
-
-        ]
+def creator_question(text: str) -> bool:
+    normalized = " ".join(text.lower().replace("ё", "е").split())
+    phrases = (
+        "кто тебя создал",
+        "кто твой создатель",
+        "кто тебя сделал",
+        "кто тебя придумал",
     )
+    return any(phrase in normalized for phrase in phrases)
 
 
-# =====================
-# СТАРТ
-# =====================
-
-async def start(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message:
         return
-
+    modes[update.effective_user.id] = "web"
     await update.message.reply_text(
-        "Ку!\n\n"
-        "Ну вообщем, я типа поисковый бот.\n"
-        "Так что, выбирай тип поиска:",
-        reply_markup=main_menu()
+        "Ку! Я типа поисковый бот.\n\nТак что, выбирай тип поиска:",
+        reply_markup=main_menu(),
     )
 
 
-# =====================
-# КНОПКИ
-# =====================
-
-async def buttons(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-
+async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    if not query:
+        return
 
     await query.answer()
-
-    modes[
-        query.from_user.id
-    ] = query.data
+    modes[query.from_user.id] = query.data
 
     names = {
-        "web": "🌐 Веб-поиск",
+        "web": "🌐 Веб поиск",
         "music": "🎵 Музыка",
         "video": "🎬 Видео",
-        "news": "📰 Новости",
-        "wiki": "📚 Википедия"
     }
-
-    mode_name = names.get(
-        query.data,
-        "Поиск"
-    )
-
     await query.edit_message_text(
-        f"✅ Хороший выбор!: {mode_name}\n\n"
-        "Теперь отправь свой запрос."
+        f"✅ Режим «{names.get(query.data, 'Веб поиск')}» выбран.\n\nОтправь запрос."
     )
 
 
-# =====================
-# СОЗДАТЕЛЬ
-# =====================
-
-def is_creator_question(text):
-
-    text = (
-        text
-        .lower()
-        .strip()
-        .replace("ё", "е")
-    )
-
-    questions = [
-
-        "кто тебя создал",
-        "кто тебя сделал",
-        "кто твой создатель",
-        "кто создатель",
-        "кто автор",
-        "кто тебя написал",
-        "кто разработал тебя",
-        "кто тебя разработал",
-        "кто тебя придумал",
-
-        "кто тебя создал?",
-        "кто тебя сделал?",
-        "кто твой создатель?",
-        "кто создатель?",
-        "кто автор?",
-        "кто тебя написал?",
-        "кто разработал тебя?",
-        "кто тебя разработал?",
-        "кто тебя придумал?"
-
-    ]
-
-    return text in questions
-
-
-# =====================
-# СООБЩЕНИЯ
-# =====================
-
-async def message(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-
-    if not update.message:
+async def message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not update.message.text:
         return
 
-    text = update.message.text.strip()
+    original = update.message.text.strip()
 
-    # =====================
-    # СОЗДАТЕЛЬ
-    # =====================
-
-    if is_creator_question(text):
-
-        await update.message.reply_text(
-            "🤖 Меня создал @teqwyz"
-        )
-
+    if not original:
+        await update.message.reply_text("✏️ Напиши поисковый запрос.")
         return
 
-    # =====================
-    # РЕЖИМ
-    # =====================
+    if creator_question(original):
+        await update.message.reply_text(f"🤖 Меня создал {OWNER}")
+        return
 
-    user_id = update.message.from_user.id
-
-    mode = modes.get(
-        user_id,
-        "web"
-    )
-
-    # =====================
-    # МУЗЫКА
-    # =====================
+    mode = modes.get(update.effective_user.id, "web")
 
     if mode == "music":
-
         await update.message.reply_text(
-            "🎵 Музыка:",
-            reply_markup=music_menu(
-                text
-            )
+            "🎵 Выбери музыкальный сервис:",
+            reply_markup=music_menu(original),
         )
-
         return
-
-    # =====================
-    # ВИДЕО
-    # =====================
 
     if mode == "video":
-
         await update.message.reply_text(
-            "🎬 Видео:",
-            reply_markup=video_menu(
-                text
-            )
+            "🎬 Выбери видеосервис:",
+            reply_markup=video_menu(original),
         )
-
         return
 
-    # =====================
-    # НОВОСТИ
-    # =====================
+    status = await update.message.reply_text("🔎 Ищу...")
+    results = web_search(original)
 
-    if mode == "news":
-
-        query = encode(text)
-
-        keyboard = InlineKeyboardMarkup(
-            [
-                [
-                    InlineKeyboardButton(
-                        "📰 Google Новости",
-                        url=(
-                            "https://news.google.com/search?q="
-                            + query
-                        )
-                    )
-                ]
-            ]
-        )
-
-        await update.message.reply_text(
-            "📰 Новости:",
-            reply_markup=keyboard
-        )
-
-        return
-
-    # =====================
-    # ВИКИПЕДИЯ
-    # =====================
-
-    if mode == "wiki":
-
-        query = encode(text)
-
-        keyboard = InlineKeyboardMarkup(
-            [
-                [
-                    InlineKeyboardButton(
-                        "📚 Википедия",
-                        url=(
-                            "https://ru.wikipedia.org/wiki/"
-                            + query
-                        )
-                    )
-                ]
-            ]
-        )
-
-        await update.message.reply_text(
-            "📚 Википедия:",
-            reply_markup=keyboard
-        )
-
-        return
-
-    # =====================
-    # ВЕБ-ПОИСК
-    # =====================
-
-    msg = await update.message.reply_text(
-        "🔎 Ищу..."
-    )
-
-    results = web_search(
-        text
-    )
-
-    if not results:
-
-        await msg.edit_text(
-            "😕 Ничего не найдено.\n\n"
-            "Попробуй изменить запрос."
-        )
-
-        return
-
-    answer = (
-        "🌐 <b>Результаты поиска:</b>\n\n"
-    )
-
+    answer = "🌐 Результаты поиска:\n\n"
     keyboard = []
 
-    for i, item in enumerate(
-        results,
-        1
-    ):
+    for index, (title, url) in enumerate(results, 1):
+        answer += f"{index}. {html.escape(title)}\n"
+        keyboard.append([
+            InlineKeyboardButton(f"🔗 Открыть {index}", url=url)
+        ])
 
-        title = item[0]
-        url = item[1]
-
-        answer += (
-            f"{i}. "
-            f"{html.escape(title[:150])}\n\n"
-        )
-
-        keyboard.append(
-            [
-                InlineKeyboardButton(
-                    f"🔗 Открыть {i}",
-                    url=url
-                )
-            ]
-        )
-
-    await msg.edit_text(
+    await status.edit_text(
         answer,
-        parse_mode="HTML",
-        reply_markup=InlineKeyboardMarkup(
-            keyboard
-        )
+        reply_markup=InlineKeyboardMarkup(keyboard),
     )
 
 
-# =====================
-# ОШИБКИ
-# =====================
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
+    print("TELEGRAM ERROR:", repr(context.error))
 
-async def error_handler(
-    update,
-    context
-):
-
-    print(
-        "BOT ERROR:",
-        repr(context.error)
-    )
-
-
-# =====================
-# ЗАПУСК
-# =====================
 
 def run():
-
     if not BOT_TOKEN:
+        raise RuntimeError("BOT_TOKEN is not set in Render Environment Variables")
 
-        raise RuntimeError(
-            "BOT_TOKEN не найден! "
-            "Добавь BOT_TOKEN в Environment Variables Render."
-        )
+    threading.Thread(target=run_flask, daemon=True).start()
 
-    # Flask для Render
+    application = Application.builder().token(BOT_TOKEN).build()
 
-    threading.Thread(
-        target=run_flask,
-        daemon=True
-    ).start()
-
-    # Telegram
-
-    bot = (
-        Application
-        .builder()
-        .token(BOT_TOKEN)
-        .build()
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CallbackQueryHandler(buttons))
+    application.add_handler(
+        MessageHandler(filters.TEXT & ~filters.COMMAND, message)
     )
+    application.add_error_handler(error_handler)
 
-    bot.add_handler(
-        CommandHandler(
-            "start",
-            start
-        )
-    )
+    print("BOT STARTED")
+    application.run_polling(drop_pending_updates=True)
 
-    bot.add_handler(
-        CallbackQueryHandler(
-            buttons
-        )
-    )
-
-    bot.add_handler(
-        MessageHandler(
-            filters.TEXT
-            & ~filters.COMMAND,
-            message
-        )
-    )
-
-    bot.add_error_handler(
-        error_handler
-    )
-
-    print(
-        "BOT STARTED"
-    )
-
-    bot.run_polling(
-        drop_pending_updates=True
-    )
-
-
-# =====================
-# MAIN
-# =====================
 
 if __name__ == "__main__":
     run()
