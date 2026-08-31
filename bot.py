@@ -4,15 +4,7 @@ import threading
 import requests
 
 from flask import Flask
-
-from bs4 import BeautifulSoup
-
-from telegram import (
-    Update,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup
-)
-
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -24,247 +16,113 @@ from telegram.ext import (
 
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
-
-PORT = int(
-    os.environ.get(
-        "PORT",
-        10000
-    )
-)
+PORT = int(os.environ.get("PORT", 10000))
 
 OWNER = "@teqwyz"
 
-
 app = Flask(__name__)
 
+modes = {}
+
+
+# =====================
+# FLASK
+# =====================
 
 @app.route("/")
 def home():
     return "Telegram Search Bot is running!"
 
 
-
 def run_flask():
-
     app.run(
         host="0.0.0.0",
         port=PORT
     )
 
 
+# =====================
+# SEARCH
+# =====================
 
-# ======================
-# ПОИСК WEB
-# ======================
+def encode(text):
+    return requests.utils.quote(
+        text,
+        safe=""
+    )
 
-def web_search(text):
+
+def web_search(query):
+
+    results = []
 
     try:
 
         r = requests.get(
-            "https://www.bing.com/search",
+            "https://api.duckduckgo.com/",
             params={
-                "q": text
+                "q": query,
+                "format": "json",
+                "no_html": 1
             },
-            headers={
-                "User-Agent":
-                "Mozilla/5.0"
-            },
-            timeout=15
+            timeout=10
         )
 
-
-        soup = BeautifulSoup(
-            r.text,
-            "html.parser"
-        )
+        data = r.json()
 
 
-        result = []
+        if data.get("AbstractText"):
+
+            results.append(
+                (
+                    data["Heading"],
+                    data["AbstractURL"]
+                )
+            )
 
 
-        for item in soup.select(
-            ".b_algo"
+        for item in data.get(
+            "RelatedTopics",
+            []
         ):
 
-            title = item.select_one(
-                "h2"
-            )
+            if isinstance(item, dict):
 
-            link = item.select_one(
-                "a"
-            )
+                if item.get("Text") and item.get("FirstURL"):
 
-
-            if title and link:
-
-                result.append(
-                    (
-                        title.text,
-                        link["href"]
+                    results.append(
+                        (
+                            item["Text"],
+                            item["FirstURL"]
+                        )
                     )
-                )
 
 
-        return result[:5]
+        if results:
+            return results[:5]
 
 
     except Exception as e:
-
         print(
-            "WEB ERROR:",
+            "SEARCH ERROR:",
             e
         )
 
-        return []
 
+    # запасной вариант
 
-
-# ======================
-# ССЫЛКИ
-# ======================
-
-def q(text):
-
-    return requests.utils.quote(
-        text
-    )
-
-
-
-def music_menu(text):
-
-    x = q(text)
-
-    return InlineKeyboardMarkup(
-        [
-
-            [
-                InlineKeyboardButton(
-                    "🎵 Spotify",
-                    url=f"https://open.spotify.com/search/{x}"
-                )
-            ],
-
-            [
-                InlineKeyboardButton(
-                    "🎵 Яндекс Музыка",
-                    url=f"https://music.yandex.ru/search?text={x}"
-                )
-            ],
-
-            [
-                InlineKeyboardButton(
-                    "🎵 VK Музыка",
-                    url=f"https://vk.com/search?section=audio&q={x}"
-                )
-            ]
-
-        ]
-    )
-
-
-
-def video_menu(text):
-
-    x = q(text)
-
-    return InlineKeyboardMarkup(
-        [
-
-            [
-                InlineKeyboardButton(
-                    "▶ YouTube",
-                    url=f"https://youtube.com/results?search_query={x}"
-                )
-            ]
-
-        ]
-    )
-
-
-
-def other_menu(text, mode):
-
-    x = q(text)
-
-
-    links = {
-
-        "news":
-        [
-            (
-                "📰 Google Новости",
-                f"https://news.google.com/search?q={x}"
-            )
-        ],
-
-        "wiki":
-        [
-            (
-                "📚 Википедия",
-                f"https://ru.wikipedia.org/wiki/{x}"
-            )
-        ],
-
-        "shop":
-        [
-            (
-                "🛒 Яндекс Маркет",
-                f"https://market.yandex.ru/search?text={x}"
-            ),
-            (
-                "🛒 Ozon",
-                f"https://www.ozon.ru/search/?text={x}"
-            )
-        ],
-
-        "maps":
-        [
-            (
-                "🗺 Google Maps",
-                f"https://www.google.com/maps/search/{x}"
-            ),
-            (
-                "🗺 Яндекс Карты",
-                f"https://yandex.ru/maps/?text={x}"
-            )
-        ]
-
-    }
-
-
-    buttons = []
-
-
-    for name, url in links.get(
-        mode,
-        []
-    ):
-
-        buttons.append(
-            [
-                InlineKeyboardButton(
-                    name,
-                    url=url
-                )
-            ]
+    return [
+        (
+            "🔎 Открыть поиск Google",
+            f"https://www.google.com/search?q={encode(query)}"
         )
-
-
-    return InlineKeyboardMarkup(
-        buttons
-    )
+    ]
 
 
 
-# ======================
-# TELEGRAM
-# ======================
-
-modes = {}
-
-
+# =====================
+# BUTTONS
+# =====================
 
 def main_menu():
 
@@ -280,34 +138,6 @@ def main_menu():
 
             [
                 InlineKeyboardButton(
-                    "📰 Новости",
-                    callback_data="news"
-                )
-            ],
-
-            [
-                InlineKeyboardButton(
-                    "📚 Википедия",
-                    callback_data="wiki"
-                )
-            ],
-
-            [
-                InlineKeyboardButton(
-                    "🛒 Товары",
-                    callback_data="shop"
-                )
-            ],
-
-            [
-                InlineKeyboardButton(
-                    "🗺 Карты",
-                    callback_data="maps"
-                )
-            ],
-
-            [
-                InlineKeyboardButton(
                     "🎵 Музыка",
                     callback_data="music"
                 )
@@ -318,12 +148,82 @@ def main_menu():
                     "🎬 Видео",
                     callback_data="video"
                 )
+            ],
+
+            [
+                InlineKeyboardButton(
+                    "📰 Новости",
+                    callback_data="news"
+                )
+            ],
+
+            [
+                InlineKeyboardButton(
+                    "📚 Википедия",
+                    callback_data="wiki"
+                )
             ]
 
         ]
     )
 
 
+
+def music_menu(text):
+
+    q = encode(text)
+
+    return InlineKeyboardMarkup(
+        [
+
+            [
+                InlineKeyboardButton(
+                    "🎵 Spotify",
+                    url=f"https://open.spotify.com/search/{q}"
+                )
+            ],
+
+            [
+                InlineKeyboardButton(
+                    "🎵 Яндекс Музыка",
+                    url=f"https://music.yandex.ru/search?text={q}"
+                )
+            ],
+
+            [
+                InlineKeyboardButton(
+                    "🎵 VK Музыка",
+                    url=f"https://vk.com/search?c%5Bsection%5D=audio&c%5Bq%5D={q}"
+                )
+            ]
+
+        ]
+    )
+
+
+
+def video_menu(text):
+
+    q = encode(text)
+
+    return InlineKeyboardMarkup(
+        [
+
+            [
+                InlineKeyboardButton(
+                    "▶ YouTube",
+                    url=f"https://www.youtube.com/results?search_query={q}"
+                )
+            ]
+
+        ]
+    )
+
+
+
+# =====================
+# TELEGRAM
+# =====================
 
 async def start(
     update: Update,
@@ -332,7 +232,7 @@ async def start(
 
     await update.message.reply_text(
         "👋 Привет!\n\n"
-        "Выбери тип поиска:",
+        "Выбери поиск:",
         reply_markup=main_menu()
     )
 
@@ -343,17 +243,17 @@ async def buttons(
     context: ContextTypes.DEFAULT_TYPE
 ):
 
-    call = update.callback_query
+    query = update.callback_query
 
-    await call.answer()
+    await query.answer()
 
 
     modes[
-        call.from_user.id
-    ] = call.data
+        query.from_user.id
+    ] = query.data
 
 
-    await call.edit_message_text(
+    await query.edit_message_text(
         "✅ Режим выбран.\n"
         "Отправь запрос."
     )
@@ -365,13 +265,12 @@ async def message(
     context: ContextTypes.DEFAULT_TYPE
 ):
 
-    text = update.message.text
+    text = update.message.text.strip()
+
+    user = update.message.from_user.id
 
 
-    if (
-        "кто тебя создал"
-        in text.lower()
-    ):
+    if "кто тебя создал" in text.lower():
 
         await update.message.reply_text(
             f"🤖 Меня создал {OWNER}"
@@ -382,7 +281,7 @@ async def message(
 
 
     mode = modes.get(
-        update.message.from_user.id,
+        user,
         "web"
     )
 
@@ -390,36 +289,63 @@ async def message(
     if mode == "music":
 
         await update.message.reply_text(
-            "Музыка:",
+            "🎵 Музыка:",
             reply_markup=music_menu(text)
         )
 
         return
 
 
+
     if mode == "video":
 
         await update.message.reply_text(
-            "Видео:",
+            "🎬 Видео:",
             reply_markup=video_menu(text)
         )
 
         return
 
 
-    if mode in [
-        "news",
-        "wiki",
-        "shop",
-        "maps"
-    ]:
+
+    if mode == "news":
 
         await update.message.reply_text(
-            "Результат:",
-            reply_markup=other_menu(
-                text,
-                mode
+
+            "📰 Новости:",
+            reply_markup=InlineKeyboardMarkup(
+                [
+                    [
+                        InlineKeyboardButton(
+                            "Google News",
+                            url=f"https://news.google.com/search?q={encode(text)}"
+                        )
+                    ]
+                ]
             )
+
+        )
+
+        return
+
+
+
+    if mode == "wiki":
+
+        await update.message.reply_text(
+
+            "📚 Википедия:",
+            reply_markup=InlineKeyboardMarkup(
+                [
+                    [
+                        InlineKeyboardButton(
+                            "Открыть",
+                            url=f"https://ru.wikipedia.org/wiki/{encode(text)}"
+                        )
+                    ]
+                ]
+            )
+
         )
 
         return
@@ -431,36 +357,25 @@ async def message(
     )
 
 
-    result = web_search(
-        text
-    )
-
-
-    if not result:
-
-        await msg.edit_text(
-            "😕 Ничего не найдено"
-        )
-
-        return
+    results = web_search(text)
 
 
 
-    text_answer = (
-        "🌐 Результаты:\n\n"
-    )
-
+    answer = "🌐 Результаты:\n\n"
 
     keyboard = []
 
 
     for i, item in enumerate(
-        result,
+        results,
         1
     ):
 
-        text_answer += (
-            f"{i}. {html.escape(item[0])}\n"
+        title, url = item
+
+
+        answer += (
+            f"{i}. {html.escape(title[:100])}\n"
         )
 
 
@@ -468,25 +383,24 @@ async def message(
             [
                 InlineKeyboardButton(
                     f"🔗 {i}",
-                    url=item[1]
+                    url=url
                 )
             ]
         )
 
 
     await msg.edit_text(
-        text_answer,
-        reply_markup=
-        InlineKeyboardMarkup(
+        answer,
+        reply_markup=InlineKeyboardMarkup(
             keyboard
         )
     )
 
 
 
-# ======================
+# =====================
 # START
-# ======================
+# =====================
 
 def run():
 
@@ -533,10 +447,11 @@ def run():
     )
 
 
-    bot.run_polling()
+    bot.run_polling(
+        drop_pending_updates=True
+    )
 
 
 
 if __name__ == "__main__":
-
     run()
