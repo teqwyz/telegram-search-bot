@@ -697,12 +697,18 @@ def music_menu(text):
         ],
 
         [
-            InlineKeyboardButton(
-                "🎵 VK Музыка",
-                url=f"https://vk.com/music/search/{q}"
-            )
-        ]
+    InlineKeyboardButton(
+        "🎵 VK Музыка 📱",
+        url=f"vk://vk.com/audio?section=search&q={q}"
+    )
+],
 
+[
+    InlineKeyboardButton(
+        "🌐 VK Музыка (браузер)",
+        url=f"https://vk.com/audio?section=search&q={q}"
+    )
+]
     ])
 
 
@@ -954,29 +960,28 @@ async def buttons(
 
 
 
-    names={
+    names = {
 
-        "web":"🌐 Веб",
+    "web": "🌐 Веб",
 
-        "ai":"🤖 AI",
+    "ai": "🤖 AI",
 
-        "music":"🎵 Музыка",
+    "music": "🎵 Музыка",
 
-        "video":"🎬 Видео",
+    "video": "🎬 Видео",
 
-        "wiki":"📚 Википедия",
+    "wiki": "📚 Википедия",
 
-        "shop":"🛒 Товары",
+    "shop": "🛒 Товары",
 
-        "maps":"🗺 Карты"
-
-    }
+    "maps": "🗺 Карты"
+}
 
 
 
     await query.edit_message_text(
 
-        "✅ Выбран режим: "
+        "Хорошо, я выбрал этот режим: "
         + names.get(
             query.data,
             "Неизвестно"
@@ -1006,8 +1011,8 @@ async def start(
 
     await update.message.reply_text(
 
-        "🤖 Привет!\n\n"
-        "Я поисковый бот с AI.\n"
+        "Привет, меня зовут durikovich!\n\n"
+        "Я поисковый бот с Artificial intelligence.\n"
         "Выбери режим:",
 
         reply_markup=main_menu()
