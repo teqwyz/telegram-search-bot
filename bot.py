@@ -365,7 +365,7 @@ async def start(
     await update.message.reply_text(
 
         "Ку! Ну я тип поисковый бот.\n\n"
-        "Так что, выбирай, что хочешь искать:",
+        "Так что, выбирай, что хочешь:",
 
         reply_markup=main_menu()
 
