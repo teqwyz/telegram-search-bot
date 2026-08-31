@@ -302,20 +302,12 @@ def web_search(text):
 
         [
             InlineKeyboardButton(
-                "🔎 Bing",
-                url=f"https://www.bing.com/search?q={q}"
+                "🔎 Яндекс",
+                url=f"https://yandex.ru/search{q}"
             )
         ],
 
-        [
-            InlineKeyboardButton(
-                "🔎 DuckDuckGo",
-                url=f"https://duckduckgo.com/?q={q}"
-            )
-        ]
-
-    ])
-
+        
 
 # =====================
 # ПРОВЕРКА СОЗДАТЕЛЯ
@@ -364,8 +356,8 @@ async def start(
 
     await update.message.reply_text(
 
-        "👋 Ку! Я поисковый бот.\n\n"
-        "Выбирай, что хочешь искать:",
+        "Ку! Ну я тип поисковый бот.\n\n"
+        "Так что, выбирай что хочешь:",
 
         reply_markup=main_menu()
 
@@ -389,7 +381,7 @@ async def help_command(
         "/help — список команд\n"
         "/about — информация о боте\n\n"
 
-        "🔎 Режимы поиска:\n"
+        "📍 Режимы поиска:\n"
         "/music — музыка\n"
         "/video — видео\n"
         "/wiki — Википедия\n"
@@ -413,8 +405,8 @@ async def about_command(
 
     await update.message.reply_text(
 
-        "🤖 Поисковый Telegram-бот\n\n"
-        f"Создатель: {OWNER}\n"
+        "Я поисковый Telegram-бот\n\n"
+        f"Меня создал: {OWNER}\n"
         "Поддерживаются поиск, музыка, видео, "
         "Википедия, товары и карты."
 
@@ -440,7 +432,7 @@ async def set_mode(
 
     await update.message.reply_text(
 
-        f"✅ Режим «{title}» включён.\n\n"
+        f"{title}? Не вопрос.\n\n"
         "Теперь отправь поисковый запрос."
 
     )
@@ -559,8 +551,8 @@ async def buttons(
 
     await query.edit_message_text(
 
-        f"✅ Режим «{name}» выбран.\n\n"
-        "Отправь поисковый запрос."
+        f"{name}? Не вопрос.\n\n"
+        "Жду, когда отправишь поисковый запрос."
 
     )
 
@@ -599,7 +591,7 @@ async def message(
 
         await update.message.reply_text(
 
-            f"🤖 Меня создал {OWNER}"
+            f"Ну слушай, меня создал {OWNER}, только никому не слово, это наш с тобой секрет..."
 
         )
 
