@@ -1,9 +1,6 @@
 import os
 import threading
-import sqlite3
 import requests
-
-from datetime import datetime
 
 from flask import Flask
 
@@ -23,195 +20,28 @@ from telegram.ext import (
 )
 
 
-# =========================
+# =====================
 # НАСТРОЙКИ
-# =========================
+# =====================
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-
-OPENAI_API_KEY = os.getenv(
-    "OPENAI_API_KEY"
-)
-
-PORT = int(
-    os.getenv(
-        "PORT",
-        "10000"
-    )
-)
-
+PORT = int(os.getenv("PORT", "10000"))
 OWNER = "@teqwyz"
 
-
 app = Flask(__name__)
-
-
 modes = {}
 
-ai_memory = {}
 
-
-# =========================
-# SQLITE
-# =========================
-
-DB = "bot.db"
-
-
-def db():
-
-    return sqlite3.connect(DB)
-
-
-
-def init_db():
-
-    con = db()
-
-    cur = con.cursor()
-
-
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS users(
-
-        id INTEGER PRIMARY KEY,
-
-        username TEXT,
-
-        first_seen TEXT,
-
-        requests INTEGER DEFAULT 0
-
-    )
-    """)
-
-
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS history(
-
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-
-        user_id INTEGER,
-
-        text TEXT,
-
-        date TEXT
-
-    )
-    """)
-
-
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS favorites(
-
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-
-        user_id INTEGER,
-
-        text TEXT
-
-    )
-    """)
-
-
-    con.commit()
-
-    con.close()
-
-
-
-def save_user(user):
-
-    con = db()
-
-    cur = con.cursor()
-
-
-    cur.execute(
-        "SELECT id FROM users WHERE id=?",
-        (user.id,)
-    )
-
-
-    if not cur.fetchone():
-
-        cur.execute(
-            """
-            INSERT INTO users
-            VALUES(?,?,?,?)
-            """,
-            (
-                user.id,
-                user.username or "",
-                datetime.now().isoformat(),
-                0
-            )
-        )
-
-
-    con.commit()
-
-    con.close()
-
-
-
-def add_request(user_id, text):
-
-    con = db()
-
-    cur = con.cursor()
-
-
-    cur.execute(
-        """
-        UPDATE users
-        SET requests=requests+1
-        WHERE id=?
-        """,
-        (user_id,)
-    )
-
-
-    cur.execute(
-        """
-        INSERT INTO history
-        (
-            user_id,
-            text,
-            date
-        )
-
-        VALUES(?,?,?)
-
-        """,
-        (
-            user_id,
-            text,
-            datetime.now().isoformat()
-        )
-    )
-
-
-    con.commit()
-
-    con.close()
-
-
-
-# =========================
-# FLASK / RENDER
-# =========================
-
+# =====================
+# RENDER / FLASK
+# =====================
 
 @app.route("/")
 def home():
-
-    return "Telegram AI Search Bot is running!"
-
+    return "Telegram Search Bot is running!"
 
 
 def run_flask():
-
     app.run(
         host="0.0.0.0",
         port=PORT,
@@ -220,46 +50,31 @@ def run_flask():
     )
 
 
-
-# =========================
-# UTILS
-# =========================
-
+# =====================
+# URL ENCODING
+# =====================
 
 def encode(text):
-
     return requests.utils.quote(
         text,
         safe=""
     )
 
 
-
-# =========================
+# =====================
 # ГЛАВНОЕ МЕНЮ
-# =========================
-
+# =====================
 
 def main_menu():
 
     return InlineKeyboardMarkup([
 
-
         [
             InlineKeyboardButton(
-                "🌐 Веб",
+                "🌐 Веб поиск",
                 callback_data="web"
             )
         ],
-
-
-        [
-            InlineKeyboardButton(
-                "🤖 AI",
-                callback_data="ai"
-            )
-        ],
-
 
         [
             InlineKeyboardButton(
@@ -268,14 +83,12 @@ def main_menu():
             )
         ],
 
-
         [
             InlineKeyboardButton(
                 "🎬 Видео",
                 callback_data="video"
             )
         ],
-
 
         [
             InlineKeyboardButton(
@@ -284,14 +97,12 @@ def main_menu():
             )
         ],
 
-
         [
             InlineKeyboardButton(
                 "🛒 Товары",
                 callback_data="shop"
             )
         ],
-
 
         [
             InlineKeyboardButton(
@@ -300,544 +111,12 @@ def main_menu():
             )
         ]
 
-
     ])
 
-# =========================
-# OPENAI AI
-# =========================
 
-def ai_request(text, user_id):
-
-    if not OPENAI_API_KEY:
-
-        return (
-            "❌ OPENAI_API_KEY не настроен.\n\n"
-            "Добавь OPENAI_API_KEY в Environment Variables "
-            "на Render."
-        )
-
-
-    history = ai_memory.get(
-        user_id,
-        []
-    )
-
-
-    history.append(
-        {
-            "role": "user",
-            "content": text
-        }
-    )
-
-
-    # Храним последние 10 сообщений
-    history = history[-10:]
-
-
-    messages = [
-
-        {
-            "role": "system",
-            "content": (
-                "Ты умный и дружелюбный Telegram-помощник. "
-                "Отвечай на русском языке, если пользователь "
-                "не попросил другой язык. "
-                "Отвечай понятно и по существу."
-            )
-        }
-
-    ] + history
-
-
-    try:
-
-        response = requests.post(
-
-            "https://api.openai.com/v1/chat/completions",
-
-            headers={
-                "Authorization":
-                    f"Bearer {OPENAI_API_KEY}",
-
-                "Content-Type":
-                    "application/json"
-            },
-
-            json={
-
-                "model":
-                    "gpt-4.1-mini",
-
-                "messages":
-                    messages,
-
-                "temperature":
-                    0.7,
-
-                "max_tokens":
-                    1500
-
-            },
-
-            timeout=60
-
-        )
-
-
-        # Проверяем HTTP-ошибку
-        if response.status_code != 200:
-
-            try:
-
-                error_data = response.json()
-
-            except Exception:
-
-                error_data = response.text
-
-
-            print(
-                "OPENAI ERROR:",
-                error_data
-            )
-
-
-            return (
-                "❌ Ошибка OpenAI:\n\n"
-                + str(error_data)
-            )
-
-
-        data = response.json()
-
-
-        if "choices" not in data:
-
-            print(
-                "OPENAI INVALID RESPONSE:",
-                data
-            )
-
-
-            return (
-                "❌ OpenAI вернул неожиданный ответ:\n"
-                + str(data)
-            )
-
-
-        answer = (
-            data["choices"][0]
-            ["message"]
-            ["content"]
-        )
-
-
-        if not answer:
-
-            return (
-                "❌ OpenAI не вернул текст ответа."
-            )
-
-
-        history.append(
-
-            {
-                "role":
-                    "assistant",
-
-                "content":
-                    answer
-            }
-
-        )
-
-
-        ai_memory[user_id] = history[-10:]
-
-
-        return answer
-
-
-    except requests.exceptions.Timeout:
-
-        return (
-            "❌ OpenAI слишком долго отвечает.\n"
-            "Попробуй ещё раз."
-        )
-
-
-    except requests.exceptions.ConnectionError:
-
-        return (
-            "❌ Не удалось подключиться к OpenAI.\n"
-            "Проверь интернет-соединение Render."
-        )
-
-
-    except Exception as e:
-
-        print(
-            "OPENAI EXCEPTION:",
-            repr(e)
-        )
-
-
-        return (
-            "❌ Ошибка соединения с OpenAI:\n"
-            + str(e)
-        )
-
-
-# =========================
-# ПРОФИЛЬ
-# =========================
-
-async def profile(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-
-    user = update.effective_user
-
-
-    if not user:
-
-        return
-
-
-    save_user(user)
-
-
-    con = db()
-
-    cur = con.cursor()
-
-
-    cur.execute(
-
-        """
-        SELECT first_seen, requests
-        FROM users
-        WHERE id=?
-        """,
-
-        (
-            user.id,
-        )
-
-    )
-
-
-    data = cur.fetchone()
-
-
-    con.close()
-
-
-    if not data:
-
-        await update.message.reply_text(
-            "❌ Профиль не найден."
-        )
-
-        return
-
-
-    await update.message.reply_text(
-
-        f"👤 Профиль\n\n"
-
-        f"🆔 ID: {user.id}\n"
-
-        f"👤 Имя: {user.first_name}\n"
-
-        f"🔗 Username: "
-        f"@{user.username if user.username else 'нет'}\n\n"
-
-        f"📅 Первый запуск:\n"
-        f"{data[0]}\n\n"
-
-        f"📊 Запросов: {data[1]}"
-
-    )
-
-
-# =========================
-# ИСТОРИЯ
-# =========================
-
-async def history_command(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-
-    user_id = update.effective_user.id
-
-
-    con = db()
-
-    cur = con.cursor()
-
-
-    cur.execute(
-
-        """
-        SELECT text, date
-        FROM history
-        WHERE user_id=?
-        ORDER BY id DESC
-        LIMIT 10
-        """,
-
-        (
-            user_id,
-        )
-
-    )
-
-
-    rows = cur.fetchall()
-
-
-    con.close()
-
-
-    if not rows:
-
-        await update.message.reply_text(
-
-            "📜 История пустая."
-
-        )
-
-        return
-
-
-    result = (
-        "📜 Последние 10 запросов:\n\n"
-    )
-
-
-    for item, date in rows:
-
-        result += (
-            f"• {item}\n"
-        )
-
-
-    await update.message.reply_text(
-        result
-    )
-
-
-# =========================
-# ДОБАВИТЬ В ИЗБРАННОЕ
-# =========================
-
-async def favorite(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-
-    if not context.args:
-
-        await update.message.reply_text(
-
-            "⭐ Использование:\n\n"
-            "/favorite текст"
-
-        )
-
-        return
-
-
-    text = " ".join(
-        context.args
-    )
-
-
-    con = db()
-
-    cur = con.cursor()
-
-
-    cur.execute(
-
-        """
-        INSERT INTO favorites
-        (
-            user_id,
-            text
-        )
-        VALUES(?, ?)
-        """,
-
-        (
-            update.effective_user.id,
-            text
-        )
-
-    )
-
-
-    con.commit()
-
-    con.close()
-
-
-    await update.message.reply_text(
-
-        "⭐ Добавлено в избранное."
-
-    )
-
-
-# =========================
-# ИЗБРАННОЕ
-# =========================
-
-async def favorites(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-
-    user_id = update.effective_user.id
-
-
-    con = db()
-
-    cur = con.cursor()
-
-
-    cur.execute(
-
-        """
-        SELECT text
-        FROM favorites
-        WHERE user_id=?
-        ORDER BY id DESC
-        """,
-
-        (
-            user_id,
-        )
-
-    )
-
-
-    rows = cur.fetchall()
-
-
-    con.close()
-
-
-    if not rows:
-
-        await update.message.reply_text(
-
-            "⭐ Избранное пустое."
-
-        )
-
-        return
-
-
-    result = (
-        "⭐ Избранное:\n\n"
-    )
-
-
-    for row in rows:
-
-        result += (
-            "• "
-            + row[0]
-            + "\n"
-        )
-
-
-    await update.message.reply_text(
-        result
-    )
-
-
-# =========================
-# ОЧИСТКА ПАМЯТИ AI
-# =========================
-
-async def clear_ai(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-
-    user_id = update.effective_user.id
-
-
-    ai_memory.pop(
-        user_id,
-        None
-    )
-
-
-    await update.message.reply_text(
-
-        "🧠 Память AI очищена.\n\n"
-        "Следующий вопрос начнёт новый диалог."
-
-    )
-
-
-# =========================
-# /ASK
-# =========================
-
-async def ask(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-
-    if not context.args:
-
-        await update.message.reply_text(
-
-            "🤖 Использование:\n\n"
-            "/ask твой вопрос\n\n"
-            "Например:\n"
-            "/ask расскажи про космос"
-
-        )
-
-        return
-
-
-    question = " ".join(
-        context.args
-    )
-
-
-    await update.message.chat.send_action(
-        "typing"
-    )
-
-
-    answer = ai_request(
-
-        question,
-
-        update.effective_user.id
-
-    )
-
-
-    await update.message.reply_text(
-        answer
-    )
-
-# =========================
-# МУЗЫКА
-# =========================
+# =====================
+# МЕНЮ МУЗЫКИ
+# =====================
 
 def music_menu(text):
 
@@ -861,14 +140,7 @@ def music_menu(text):
 
         [
             InlineKeyboardButton(
-                "🎵 VK Музыка 📱",
-                url=f"vk://vk.com/audio?section=search&q={q}"
-            )
-        ],
-
-        [
-            InlineKeyboardButton(
-                "🌐 VK Музыка — браузер",
+                "🎵 VK Музыка",
                 url=f"https://vk.com/audio?section=search&q={q}"
             )
         ]
@@ -876,9 +148,9 @@ def music_menu(text):
     ])
 
 
-# =========================
-# ВИДЕО
-# =========================
+# =====================
+# МЕНЮ ВИДЕО
+# =====================
 
 def video_menu(text):
 
@@ -888,7 +160,7 @@ def video_menu(text):
 
         [
             InlineKeyboardButton(
-                "▶️ YouTube",
+                "▶ YouTube",
                 url=(
                     "https://www.youtube.com/results"
                     f"?search_query={q}"
@@ -898,14 +170,14 @@ def video_menu(text):
 
         [
             InlineKeyboardButton(
-                "▶️ VK Видео",
-                url=f"https://vk.com/video?q={q}"
+                "▶ VK Видео",
+                url=f"https://vk.com/video/search?q={q}"
             )
         ],
 
         [
             InlineKeyboardButton(
-                "▶️ Rutube",
+                "▶ Rutube",
                 url=f"https://rutube.ru/search/?query={q}"
             )
         ]
@@ -913,15 +185,19 @@ def video_menu(text):
     ])
 
 
-# =========================
-# WIKI / SHOP / MAPS
-# =========================
+# =====================
+# ВИКИ / ТОВАРЫ / КАРТЫ
+# =====================
 
 def other_menu(text, mode):
 
     q = encode(text)
 
     links = {
+
+        # -----------------
+        # ВИКИПЕДИЯ
+        # -----------------
 
         "wiki": [
 
@@ -931,6 +207,10 @@ def other_menu(text, mode):
             )
 
         ],
+
+        # -----------------
+        # ТОВАРЫ
+        # -----------------
 
         "shop": [
 
@@ -954,11 +234,18 @@ def other_menu(text, mode):
 
         ],
 
+        # -----------------
+        # КАРТЫ
+        # -----------------
+
         "maps": [
 
             (
                 "🗺 Google Maps",
-                f"https://www.google.com/maps/search/{q}"
+                (
+                    "https://www.google.com/maps/search/"
+                    f"?api=1&query={q}"
+                )
             ),
 
             (
@@ -980,31 +267,25 @@ def other_menu(text, mode):
 
     }
 
-    buttons_list = []
-
+    buttons = []
 
     for name, url in links.get(mode, []):
 
-        buttons_list.append(
+        buttons.append([
 
-            [
-                InlineKeyboardButton(
-                    name,
-                    url=url
-                )
-            ]
+            InlineKeyboardButton(
+                name,
+                url=url
+            )
 
-        )
+        ])
 
-
-    return InlineKeyboardMarkup(
-        buttons_list
-    )
+    return InlineKeyboardMarkup(buttons)
 
 
-# =========================
-# WEB SEARCH
-# =========================
+# =====================
+# ВЕБ ПОИСК
+# =====================
 
 def web_search(text):
 
@@ -1021,46 +302,217 @@ def web_search(text):
 
         [
             InlineKeyboardButton(
-                "🔎 Яндекс",
-                url=f"https://yandex.ru/search/?text={q}"
+                "🔎 Bing",
+                url=f"https://www.bing.com/search?q={q}"
+            )
+        ],
+
+        [
+            InlineKeyboardButton(
+                "🔎 DuckDuckGo",
+                url=f"https://duckduckgo.com/?q={q}"
             )
         ]
 
     ])
 
 
-# =========================
-# СОЗДАТЕЛЬ
-# =========================
+# =====================
+# ПРОВЕРКА СОЗДАТЕЛЯ
+# =====================
 
 def creator_question(text):
 
-    text = (
+    normalized = (
         text
         .lower()
         .replace("ё", "е")
     )
 
-
-    phrases = [
+    phrases = (
 
         "кто тебя создал",
         "кто твой создатель",
         "кто тебя сделал",
-        "кто тебя придумал"
+        "кто тебя придумал",
+        "кто создал тебя",
+        "кто сделал тебя"
 
-    ]
-
+    )
 
     return any(
-        phrase in text
+        phrase in normalized
         for phrase in phrases
     )
 
 
-# =========================
-# КНОПКИ МЕНЮ
-# =========================
+# =====================
+# /START
+# =====================
+
+async def start(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    if not update.message:
+        return
+
+    modes[
+        update.effective_user.id
+    ] = "web"
+
+    await update.message.reply_text(
+
+        "👋 Ку! Я поисковый бот.\n\n"
+        "Выбирай, что хочешь искать:",
+
+        reply_markup=main_menu()
+
+    )
+
+
+# =====================
+# /HELP
+# =====================
+
+async def help_command(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    await update.message.reply_text(
+
+        "🤖 Помощь\n\n"
+
+        "/start — главное меню\n"
+        "/help — список команд\n"
+        "/about — информация о боте\n\n"
+
+        "🔎 Режимы поиска:\n"
+        "/music — музыка\n"
+        "/video — видео\n"
+        "/wiki — Википедия\n"
+        "/shop — товары\n"
+        "/maps — карты\n\n"
+
+        "Также можно использовать кнопки "
+        "главного меню."
+
+    )
+
+
+# =====================
+# /ABOUT
+# =====================
+
+async def about_command(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    await update.message.reply_text(
+
+        "🤖 Поисковый Telegram-бот\n\n"
+        f"Создатель: {OWNER}\n"
+        "Поддерживаются поиск, музыка, видео, "
+        "Википедия, товары и карты."
+
+    )
+
+
+# =====================
+# УСТАНОВКА РЕЖИМА
+# =====================
+
+async def set_mode(
+    update: Update,
+    mode,
+    title
+):
+
+    if not update.message:
+        return
+
+    modes[
+        update.effective_user.id
+    ] = mode
+
+    await update.message.reply_text(
+
+        f"✅ Режим «{title}» включён.\n\n"
+        "Теперь отправь поисковый запрос."
+
+    )
+
+
+# =====================
+# КОМАНДЫ ПОИСКА
+# =====================
+
+async def music_command(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    await set_mode(
+        update,
+        "music",
+        "🎵 Музыка"
+    )
+
+
+async def video_command(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    await set_mode(
+        update,
+        "video",
+        "🎬 Видео"
+    )
+
+
+async def wiki_command(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    await set_mode(
+        update,
+        "wiki",
+        "📚 Википедия"
+    )
+
+
+async def shop_command(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    await set_mode(
+        update,
+        "shop",
+        "🛒 Товары"
+    )
+
+
+async def maps_command(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    await set_mode(
+        update,
+        "maps",
+        "🗺 Карты"
+    )
+
+
+# =====================
+# КНОПКИ
+# =====================
 
 async def buttons(
     update: Update,
@@ -1069,31 +521,19 @@ async def buttons(
 
     query = update.callback_query
 
-
-    if query is None:
+    if not query:
         return
 
-
-    # Подтверждаем нажатие кнопки
     await query.answer()
 
-
-    user_id = query.from_user.id
-
-    mode = query.data
-
-
-    # Сохраняем выбранный режим
-    modes[user_id] = mode
-
+    modes[
+        query.from_user.id
+    ] = query.data
 
     names = {
 
         "web":
-            "🌐 Веб",
-
-        "ai":
-            "🤖 AI",
+            "🌐 Веб поиск",
 
         "music":
             "🎵 Музыка",
@@ -1112,119 +552,22 @@ async def buttons(
 
     }
 
-
-    selected_name = names.get(
-        mode,
-        "Неизвестно"
+    name = names.get(
+        query.data,
+        "🌐 Веб поиск"
     )
 
+    await query.edit_message_text(
 
-    try:
-
-        await query.edit_message_text(
-
-            text=(
-                f"✅ Режим выбран: {selected_name}\n\n"
-                "Отправь запрос."
-            ),
-
-            reply_markup=main_menu()
-
-        )
-
-
-    except Exception as e:
-
-        print(
-            "BUTTON ERROR:",
-            repr(e)
-        )
-
-
-        # Если сообщение уже нельзя изменить,
-        # отправляем новое
-        try:
-
-            await query.message.reply_text(
-
-                text=(
-                    f"✅ Режим выбран: {selected_name}\n\n"
-                    "Отправь запрос."
-                ),
-
-                reply_markup=main_menu()
-
-            )
-
-        except Exception as inner_error:
-
-            print(
-                "BUTTON SEND ERROR:",
-                repr(inner_error)
-            )
-
-
-# =========================
-# START
-# =========================
-
-async def start(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-
-    user = update.effective_user
-
-
-    if not user:
-        return
-
-
-    save_user(user)
-
-
-    modes[user.id] = "web"
-
-
-    await update.message.reply_text(
-
-        "🤖 Привет! Я durikovich.\n\n"
-        "Я поисковый бот с AI.\n"
-        "Выбирай режим:",
-
-        reply_markup=main_menu()
+        f"✅ Режим «{name}» выбран.\n\n"
+        "Отправь поисковый запрос."
 
     )
 
 
-# =========================
-# HELP
-# =========================
-
-async def help_command(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-
-    await update.message.reply_text(
-
-        "📌 Команды:\n\n"
-
-        "/start — открыть меню\n"
-        "/help — помощь\n"
-        "/ask текст — спросить AI\n"
-        "/profile — профиль\n"
-        "/history — история запросов\n"
-        "/favorite текст — добавить в избранное\n"
-        "/favorites — показать избранное\n"
-        "/clear — очистить память AI"
-
-    )
-
-
-# =========================
-# СООБЩЕНИЯ
-# =========================
+# =====================
+# ОБРАБОТКА СООБЩЕНИЙ
+# =====================
 
 async def message(
     update: Update,
@@ -1234,37 +577,23 @@ async def message(
     if not update.message:
         return
 
-
     if not update.message.text:
         return
 
-
     text = update.message.text.strip()
 
-
     if not text:
+
+        await update.message.reply_text(
+            "✏️ Напиши поисковый запрос."
+        )
+
         return
 
 
-    user = update.effective_user
-
-
-    if not user:
-        return
-
-
-    save_user(user)
-
-
-    add_request(
-        user.id,
-        text
-    )
-
-
-    # =====================
+    # -----------------
     # СОЗДАТЕЛЬ
-    # =====================
+    # -----------------
 
     if creator_question(text):
 
@@ -1277,84 +606,52 @@ async def message(
         return
 
 
-    # =====================
-    # ТЕКУЩИЙ РЕЖИМ
-    # =====================
-
     mode = modes.get(
-        user.id,
+
+        update.effective_user.id,
+
         "web"
+
     )
 
 
-    # =====================
-    # AI
-    # =====================
-
-    if mode == "ai":
-
-        await update.message.chat.send_action(
-            "typing"
-        )
-
-
-        answer = ai_request(
-
-            text,
-
-            user.id
-
-        )
-
-
-        await update.message.reply_text(
-            answer
-        )
-
-        return
-
-
-    # =====================
+    # -----------------
     # МУЗЫКА
-    # =====================
+    # -----------------
 
     if mode == "music":
 
         await update.message.reply_text(
 
-            "🎵 Выбери сервис:",
+            "🎵 Выбирай, где будешь слушать:",
 
-            reply_markup=music_menu(
-                text
-            )
+            reply_markup=music_menu(text)
 
         )
 
         return
 
 
-    # =====================
+    # -----------------
     # ВИДЕО
-    # =====================
+    # -----------------
 
     if mode == "video":
 
         await update.message.reply_text(
 
-            "🎬 Выбери сервис:",
+            "🎬 Выбирай, где будешь смотреть:",
 
-            reply_markup=video_menu(
-                text
-            )
+            reply_markup=video_menu(text)
 
         )
 
         return
 
 
-    # =====================
+    # -----------------
     # WIKI / SHOP / MAPS
-    # =====================
+    # -----------------
 
     if mode in [
 
@@ -1366,7 +663,7 @@ async def message(
 
         await update.message.reply_text(
 
-            "🔎 Результаты:",
+            "🔎 Вот варианты поиска:",
 
             reply_markup=other_menu(
                 text,
@@ -1378,181 +675,129 @@ async def message(
         return
 
 
-    # =====================
+    # -----------------
     # WEB
-    # =====================
+    # -----------------
 
     await update.message.reply_text(
 
-        "🌐 Поиск:",
+        "🌐 Выбирай поисковик:",
 
-        reply_markup=web_search(
-            text
-        )
+        reply_markup=web_search(text)
 
     )
 
-# =========================
-# ERROR HANDLER
-# =========================
+
+# =====================
+# ОШИБКИ
+# =====================
 
 async def error_handler(
     update,
-    context: ContextTypes.DEFAULT_TYPE
+    context
 ):
 
     print(
-        "BOT ERROR:",
+        "TELEGRAM ERROR:",
         repr(context.error)
     )
 
 
-# =========================
+# =====================
 # ЗАПУСК
-# =========================
+# =====================
 
 def run():
 
-    # Проверяем токен Telegram
     if not BOT_TOKEN:
 
         raise RuntimeError(
-            "❌ BOT_TOKEN не найден в Environment Variables"
+            "BOT_TOKEN не найден в Environment Variables Render"
         )
 
 
-    # Проверяем OpenAI
-    if not OPENAI_API_KEY:
-
-        print(
-            "⚠️ OPENAI_API_KEY не найден."
-            " AI работать не будет."
-        )
-
-
-    # Создаём таблицы SQLite
-    init_db()
-
-
-    # =========================
-    # FLASK ДЛЯ RENDER
-    # =========================
-
-    flask_thread = threading.Thread(
+    threading.Thread(
 
         target=run_flask,
-
         daemon=True
 
-    )
+    ).start()
 
-    flask_thread.start()
-
-
-    # =========================
-    # TELEGRAM APPLICATION
-    # =========================
 
     application = (
 
         Application
-
         .builder()
-
         .token(BOT_TOKEN)
-
         .build()
 
     )
 
 
-    # =========================
+    # -----------------
     # КОМАНДЫ
-    # =========================
+    # -----------------
 
     application.add_handler(
-
         CommandHandler(
             "start",
             start
         )
-
     )
 
-
     application.add_handler(
-
         CommandHandler(
             "help",
             help_command
         )
-
     )
-
 
     application.add_handler(
-
         CommandHandler(
-            "ask",
-            ask
+            "about",
+            about_command
         )
-
     )
-
 
     application.add_handler(
-
         CommandHandler(
-            "profile",
-            profile
+            "music",
+            music_command
         )
-
     )
-
 
     application.add_handler(
-
         CommandHandler(
-            "history",
-            history_command
+            "video",
+            video_command
         )
-
     )
-
 
     application.add_handler(
-
         CommandHandler(
-            "favorite",
-            favorite
+            "wiki",
+            wiki_command
         )
-
     )
-
 
     application.add_handler(
-
         CommandHandler(
-            "favorites",
-            favorites
+            "shop",
+            shop_command
         )
-
     )
-
 
     application.add_handler(
-
         CommandHandler(
-            "clear",
-            clear_ai
+            "maps",
+            maps_command
         )
-
     )
 
 
-    # =========================
-    # INLINE-КНОПКИ
-    # =========================
+    # -----------------
+    # КНОПКИ
+    # -----------------
 
     application.add_handler(
 
@@ -1563,75 +808,36 @@ def run():
     )
 
 
-    # =========================
-    # ОБЫЧНЫЕ СООБЩЕНИЯ
-    # =========================
+    # -----------------
+    # ТЕКСТ
+    # -----------------
 
     application.add_handler(
 
         MessageHandler(
-
-            filters.TEXT
-            & ~filters.COMMAND,
-
+            filters.TEXT & ~filters.COMMAND,
             message
-
         )
 
     )
 
 
-    # =========================
-    # ОШИБКИ
-    # =========================
-
     application.add_error_handler(
-
         error_handler
-
     )
 
 
-    print(
-        "=============================="
-    )
+    print("BOT STARTED")
 
-    print(
-        "🤖 BOT STARTED"
-    )
-
-    print(
-        "🌐 Flask server started"
-    )
-
-    print(
-        "🔘 Inline buttons enabled"
-    )
-
-    print(
-        "🧠 OpenAI enabled:",
-        bool(OPENAI_API_KEY)
-    )
-
-    print(
-        "=============================="
-    )
-
-
-    # =========================
-    # ЗАПУСК TELEGRAM
-    # =========================
 
     application.run_polling(
-
         drop_pending_updates=True
-
     )
 
 
-# =========================
+# =====================
 # MAIN
-# =========================
+# =====================
 
 if __name__ == "__main__":
 
