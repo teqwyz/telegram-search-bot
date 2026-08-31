@@ -141,7 +141,7 @@ def music_menu(text):
         [
             InlineKeyboardButton(
                 "🎵 VK Музыка",
-                url=f"https://vk.ru/audios866956338"
+                url=f"https://vk.ru/audios"
             )
         ]
 
