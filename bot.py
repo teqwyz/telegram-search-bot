@@ -264,13 +264,8 @@ def main_menu():
 
 def ai_request(text, user_id):
 
-    if not OPENAI_API_KEY:
-
-        return (
-            "❌ AI не настроен.\n\n"
-            "Добавь в Render Environment Variables:\n"
-            "OPENAI_API_KEY=твой_ключ"
-        )
+    if not DEEPSEEK_API_KEY:
+        return "❌ Нет DEEPSEEK_API_KEY"
 
 
     history = ai_memory.get(
@@ -294,43 +289,44 @@ def ai_request(text, user_id):
 
         response = requests.post(
 
-            "https://api.openai.com/v1/chat/completions",
+            "https://api.deepseek.com/chat/completions",
 
             headers={
 
                 "Authorization":
-                    f"Bearer {OPENAI_API_KEY}",
+                f"Bearer {DEEPSEEK_API_KEY}",
 
                 "Content-Type":
-                    "application/json"
+                "application/json"
 
             },
 
             json={
 
                 "model":
-                    "gpt-4.1-mini",
+                "deepseek-chat",
 
                 "messages":
 
-                    [
-                        {
-                            "role":
-                                "system",
+                [
+                    {
+                        "role":
+                        "system",
 
-                            "content":
-                                "Ты полезный Telegram помощник. Отвечай кратко и понятно."
-                        }
-                    ]
-                    +
-                    history,
+                        "content":
+                        "Ты умный Telegram помощник."
+                    }
+                ]
+                +
+                history,
 
-                "max_tokens":
-                    1000
+
+                "temperature":
+                0.7
 
             },
 
-            timeout=30
+            timeout=60
 
         )
 
@@ -340,32 +336,27 @@ def ai_request(text, user_id):
 
         if "choices" not in data:
 
-            error = data.get(
-                "error",
-                {}
-            ).get(
-                "message",
-                "Неизвестная ошибка"
-            )
-
-
             return (
-                "❌ Ошибка AI API:\n"
-                + error
+                "❌ Ошибка DeepSeek:\n"
+                + str(data)
             )
 
 
-        answer = data["choices"][0]["message"]["content"]
+        answer = (
+            data["choices"][0]
+            ["message"]
+            ["content"]
+        )
 
 
         history.append(
 
             {
                 "role":
-                    "assistant",
+                "assistant",
 
                 "content":
-                    answer
+                answer
             }
 
         )
@@ -381,10 +372,9 @@ def ai_request(text, user_id):
     except Exception as e:
 
         return (
-            "❌ Ошибка подключения AI:\n"
+            "❌ Ошибка подключения:\n"
             + str(e)
         )
-
 
 
 # =========================
