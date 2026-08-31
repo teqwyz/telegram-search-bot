@@ -1,3 +1,4 @@
+```python
 import os
 import threading
 import sqlite3
@@ -27,17 +28,19 @@ from telegram.ext import (
 # =========================
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+# Ключ DeepSeek
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 
 PORT = int(os.getenv("PORT", "10000"))
 
 OWNER = "@teqwyz"
 
-
 app = Flask(__name__)
 
 modes = {}
 
+# Память AI
 ai_memory = {}
 
 
@@ -49,7 +52,6 @@ DB = "bot.db"
 
 
 def db():
-
     return sqlite3.connect(DB)
 
 
@@ -57,7 +59,6 @@ def init_db():
 
     con = db()
     cur = con.cursor()
-
 
     cur.execute("""
     CREATE TABLE IF NOT EXISTS users(
@@ -68,7 +69,6 @@ def init_db():
     )
     """)
 
-
     cur.execute("""
     CREATE TABLE IF NOT EXISTS history(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -78,7 +78,6 @@ def init_db():
     )
     """)
 
-
     cur.execute("""
     CREATE TABLE IF NOT EXISTS favorites(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -87,10 +86,8 @@ def init_db():
     )
     """)
 
-
     con.commit()
     con.close()
-
 
 
 def save_user(user):
@@ -98,12 +95,10 @@ def save_user(user):
     con = db()
     cur = con.cursor()
 
-
     cur.execute(
         "SELECT id FROM users WHERE id=?",
         (user.id,)
     )
-
 
     if not cur.fetchone():
 
@@ -120,17 +115,14 @@ def save_user(user):
             )
         )
 
-
     con.commit()
     con.close()
 
 
+def add_request(user_id, text):
 
-def add_request(user_id,text):
-
-    con=db()
-    cur=con.cursor()
-
+    con = db()
+    cur = con.cursor()
 
     cur.execute(
         """
@@ -140,7 +132,6 @@ def add_request(user_id,text):
         """,
         (user_id,)
     )
-
 
     cur.execute(
         """
@@ -154,22 +145,18 @@ def add_request(user_id,text):
         )
     )
 
-
     con.commit()
     con.close()
 
 
-
 # =========================
-# FLASK RENDER
+# FLASK / RENDER
 # =========================
-
 
 @app.route("/")
 def home():
 
     return "Telegram AI Search Bot is running!"
-
 
 
 def run_flask():
@@ -182,11 +169,9 @@ def run_flask():
     )
 
 
-
 # =========================
-# UTILS
+# URL
 # =========================
-
 
 def encode(text):
 
@@ -196,11 +181,9 @@ def encode(text):
     )
 
 
-
 # =========================
 # ГЛАВНОЕ МЕНЮ
 # =========================
-
 
 def main_menu():
 
@@ -257,23 +240,31 @@ def main_menu():
 
     ])
 
-# =========================
-# AI OPENAI
-# =========================
 
+# =========================
+# AI DEEPSEEK
+# =========================
 
 def ai_request(text, user_id):
 
+    # Проверяем ключ
     if not DEEPSEEK_API_KEY:
-        return "❌ Нет DEEPSEEK_API_KEY"
+
+        return (
+            "❌ DeepSeek не настроен.\n\n"
+            "Добавь переменную DEEPSEEK_API_KEY "
+            "в Environment Variables Render."
+        )
 
 
+    # Получаем историю пользователя
     history = ai_memory.get(
         user_id,
         []
     )
 
 
+    # Добавляем вопрос
     history.append(
         {
             "role": "user",
@@ -282,6 +273,7 @@ def ai_request(text, user_id):
     )
 
 
+    # Оставляем последние сообщения
     history = history[-10:]
 
 
@@ -314,12 +306,18 @@ def ai_request(text, user_id):
                         "system",
 
                         "content":
-                        "Ты умный Telegram помощник."
+                        (
+                            "Ты умный и дружелюбный "
+                            "Telegram помощник. "
+                            "Отвечай на русском языке, "
+                            "если пользователь пишет по-русски."
+                        )
                     }
                 ]
-                +
-                history,
 
+                +
+
+                history,
 
                 "temperature":
                 0.7
@@ -331,13 +329,28 @@ def ai_request(text, user_id):
         )
 
 
+        # Проверяем HTTP-ошибку
+        if response.status_code != 200:
+
+            try:
+                data = response.json()
+            except Exception:
+                data = response.text
+
+            return (
+                "❌ DeepSeek вернул ошибку.\n\n"
+                f"HTTP: {response.status_code}\n"
+                f"{data}"
+            )
+
+
         data = response.json()
 
 
         if "choices" not in data:
 
             return (
-                "❌ Ошибка DeepSeek:\n"
+                "❌ В ответе DeepSeek нет результата.\n\n"
                 + str(data)
             )
 
@@ -349,6 +362,7 @@ def ai_request(text, user_id):
         )
 
 
+        # Сохраняем ответ AI
         history.append(
 
             {
@@ -362,17 +376,32 @@ def ai_request(text, user_id):
         )
 
 
-        ai_memory[user_id] = history
+        ai_memory[user_id] = history[-10:]
 
 
         return answer
 
 
+    except requests.exceptions.Timeout:
+
+        return (
+            "❌ DeepSeek слишком долго отвечает. "
+            "Попробуй ещё раз."
+        )
+
+
+    except requests.exceptions.RequestException as e:
+
+        return (
+            "❌ Ошибка подключения к DeepSeek:\n"
+            + str(e)
+        )
+
 
     except Exception as e:
 
         return (
-            "❌ Ошибка подключения:\n"
+            "❌ Ошибка AI:\n"
             + str(e)
         )
 
@@ -381,7 +410,6 @@ def ai_request(text, user_id):
 # ПРОФИЛЬ
 # =========================
 
-
 async def profile(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
@@ -389,29 +417,21 @@ async def profile(
 
     user = update.effective_user
 
-
     save_user(user)
 
-
-    con=db()
-    cur=con.cursor()
-
+    con = db()
+    cur = con.cursor()
 
     cur.execute(
-
         """
         SELECT first_seen, requests
         FROM users
         WHERE id=?
         """,
-
         (user.id,)
-
     )
 
-
     data = cur.fetchone()
-
 
     con.close()
 
@@ -429,11 +449,9 @@ async def profile(
         )
 
 
-
 # =========================
 # ИСТОРИЯ
 # =========================
-
 
 async def history_command(
     update: Update,
@@ -442,13 +460,10 @@ async def history_command(
 
     user_id = update.effective_user.id
 
-
-    con=db()
-    cur=con.cursor()
-
+    con = db()
+    cur = con.cursor()
 
     cur.execute(
-
         """
         SELECT text,date
         FROM history
@@ -456,14 +471,10 @@ async def history_command(
         ORDER BY id DESC
         LIMIT 10
         """,
-
         (user_id,)
-
     )
 
-
     rows = cur.fetchall()
-
 
     con.close()
 
@@ -477,24 +488,22 @@ async def history_command(
         return
 
 
-    text = "📜 Последние запросы:\n\n"
+    result = "📜 Последние запросы:\n\n"
 
 
-    for item,date in rows:
+    for item, date in rows:
 
-        text += (
-            f"• {item}\n"
-        )
+        result += f"• {item}\n"
 
 
-    await update.message.reply_text(text)
-
+    await update.message.reply_text(
+        result
+    )
 
 
 # =========================
 # ИЗБРАННОЕ
 # =========================
-
 
 async def favorite(
     update: Update,
@@ -504,10 +513,8 @@ async def favorite(
     if not context.args:
 
         await update.message.reply_text(
-
             "Используй:\n"
             "/favorite текст"
-
         )
 
         return
@@ -518,36 +525,27 @@ async def favorite(
     )
 
 
-    con=db()
-    cur=con.cursor()
-
+    con = db()
+    cur = con.cursor()
 
     cur.execute(
-
         """
-        INSERT INTO favorites
-        (user_id,text)
+        INSERT INTO favorites(user_id,text)
         VALUES(?,?)
         """,
-
         (
             update.effective_user.id,
             text
         )
-
     )
-
 
     con.commit()
     con.close()
 
 
     await update.message.reply_text(
-
         "⭐ Добавлено в избранное."
-
     )
-
 
 
 async def favorites(
@@ -555,27 +553,21 @@ async def favorites(
     context: ContextTypes.DEFAULT_TYPE
 ):
 
-    con=db()
-    cur=con.cursor()
-
+    con = db()
+    cur = con.cursor()
 
     cur.execute(
-
         """
         SELECT text
         FROM favorites
         WHERE user_id=?
         """,
-
         (
             update.effective_user.id,
         )
-
     )
 
-
-    rows=cur.fetchall()
-
+    rows = cur.fetchall()
 
     con.close()
 
@@ -589,7 +581,7 @@ async def favorites(
         return
 
 
-    result="⭐ Избранное:\n\n"
+    result = "⭐ Избранное:\n\n"
 
 
     for row in rows:
@@ -601,14 +593,14 @@ async def favorites(
         )
 
 
-    await update.message.reply_text(result)
-
+    await update.message.reply_text(
+        result
+    )
 
 
 # =========================
-# ОЧИСТКА AI ПАМЯТИ
+# ОЧИСТКА AI
 # =========================
-
 
 async def clear_ai(
     update: Update,
@@ -616,26 +608,19 @@ async def clear_ai(
 ):
 
     ai_memory.pop(
-
         update.effective_user.id,
-
         None
-
     )
 
 
     await update.message.reply_text(
-
         "🧠 Память AI очищена."
-
     )
 
 
-
 # =========================
-# КОМАНДА ASK
+# /ASK
 # =========================
-
 
 async def ask(
     update: Update,
@@ -645,10 +630,8 @@ async def ask(
     if not context.args:
 
         await update.message.reply_text(
-
             "Пример:\n"
             "/ask расскажи про космос"
-
         )
 
         return
@@ -660,21 +643,24 @@ async def ask(
 
 
     await update.message.reply_text(
-
-        ai_request(
-
-            question,
-
-            update.effective_user.id
-
-        )
-
+        "Печатает..."
     )
+
+
+    answer = ai_request(
+        question,
+        update.effective_user.id
+    )
+
+
+    await update.message.reply_text(
+        answer
+    )
+
 
 # =========================
 # МУЗЫКА
 # =========================
-
 
 def music_menu(text):
 
@@ -685,38 +671,51 @@ def music_menu(text):
         [
             InlineKeyboardButton(
                 "🎵 Spotify",
-                url=f"https://open.spotify.com/search/{q}"
+                url=(
+                    "https://open.spotify.com/search/"
+                    + q
+                )
             )
         ],
 
         [
             InlineKeyboardButton(
                 "🎵 Яндекс Музыка",
-                url=f"https://music.yandex.ru/search?text={q}"
+                url=(
+                    "https://music.yandex.ru/search?text="
+                    + q
+                )
             )
         ],
 
         [
-    InlineKeyboardButton(
-        "🎵 VK Музыка 📱",
-        url=f"vk://vk.com/audio?section=search&q={q}"
-    )
-],
+            InlineKeyboardButton(
+                "🎵 VK Музыка 📱",
+                url=(
+                    "https://vk.com/audio?"
+                    "section=search&q="
+                    + q
+                )
+            )
+        ],
 
-[
-    InlineKeyboardButton(
-        "🌐 VK Музыка (браузер)",
-        url=f"https://vk.com/audio?section=search&q={q}"
-    )
-]
+        [
+            InlineKeyboardButton(
+                "🌐 VK Музыка",
+                url=(
+                    "https://vk.com/audio?"
+                    "section=search&q="
+                    + q
+                )
+            )
+        ]
+
     ])
-
 
 
 # =========================
 # ВИДЕО
 # =========================
-
 
 def video_menu(text):
 
@@ -727,33 +726,41 @@ def video_menu(text):
         [
             InlineKeyboardButton(
                 "▶ YouTube",
-                url=f"https://www.youtube.com/results?search_query={q}"
+                url=(
+                    "https://www.youtube.com/results?"
+                    "search_query="
+                    + q
+                )
             )
         ],
 
         [
             InlineKeyboardButton(
                 "▶ VK Видео",
-                url=f"https://vk.com/video?q={q}"
+                url=(
+                    "https://vk.com/video?"
+                    "q="
+                    + q
+                )
             )
         ],
 
         [
             InlineKeyboardButton(
                 "▶ Rutube",
-                url=f"https://rutube.ru/search/?query={q}"
+                url=(
+                    "https://rutube.ru/search/?query="
+                    + q
+                )
             )
         ]
 
     ])
 
 
-
-
 # =========================
-# ВИКИПЕДИЯ / ТОВАРЫ / КАРТЫ
+# WIKI / SHOP / MAPS
 # =========================
-
 
 def other_menu(text, mode):
 
@@ -762,12 +769,12 @@ def other_menu(text, mode):
 
     links = {
 
-
         "wiki": [
 
             (
                 "📚 Википедия",
-                f"https://ru.wikipedia.org/wiki/{q}"
+                "https://ru.wikipedia.org/wiki/"
+                + q
             )
 
         ],
@@ -777,43 +784,50 @@ def other_menu(text, mode):
 
             (
                 "🛒 Яндекс Маркет",
-                f"https://market.yandex.ru/search?text={q}"
+                "https://market.yandex.ru/search?text="
+                + q
             ),
 
             (
                 "🛒 Ozon",
-                f"https://www.ozon.ru/search/?text={q}"
+                "https://www.ozon.ru/search/?text="
+                + q
             ),
 
             (
                 "🛒 Wildberries",
-                f"https://www.wildberries.ru/catalog/0/search.aspx?search={q}"
+                "https://www.wildberries.ru/catalog/0/"
+                "search.aspx?search="
+                + q
             )
 
         ],
-
 
 
         "maps": [
 
             (
                 "🗺 Google Maps",
-                f"https://www.google.com/maps/search/{q}"
+                "https://www.google.com/maps/search/"
+                + q
             ),
 
             (
                 "🗺 Яндекс Карты",
-                f"https://yandex.ru/maps/?text={q}"
+                "https://yandex.ru/maps/?text="
+                + q
             ),
 
             (
                 "🗺 2ГИС",
-                f"https://2gis.ru/search/{q}"
+                "https://2gis.ru/search/"
+                + q
             ),
 
             (
                 "🗺 Apple Maps",
-                f"https://maps.apple.com/?q={q}"
+                "https://maps.apple.com/?q="
+                + q
             )
 
         ]
@@ -821,92 +835,75 @@ def other_menu(text, mode):
     }
 
 
-    buttons=[]
+    buttons = []
 
 
-    for name,url in links.get(mode, []):
-
+    for name, url in links.get(mode, []):
 
         buttons.append(
 
             [
-
                 InlineKeyboardButton(
                     name,
                     url=url
                 )
-
             ]
 
         )
 
 
-    return InlineKeyboardMarkup(buttons)
-
-
+    return InlineKeyboardMarkup(
+        buttons
+    )
 
 
 # =========================
 # ВЕБ ПОИСК
 # =========================
 
-
 def web_search(text):
 
     q = encode(text)
 
-
     return InlineKeyboardMarkup([
 
-
         [
-
             InlineKeyboardButton(
-
                 "🔎 Google",
-
-                url=f"https://www.google.com/search?q={q}"
-
+                url=(
+                    "https://www.google.com/search?q="
+                    + q
+                )
             )
-
         ],
 
-
         [
-
             InlineKeyboardButton(
-
                 "🔎 Яндекс",
-
-                url=f"https://yandex.ru/search/?text={q}"
-
+                url=(
+                    "https://yandex.ru/search/?text="
+                    + q
+                )
             )
-
         ]
 
     ])
 
 
-
-
-
 # =========================
-# СОЗДАТЕЛЬ БОТА
+# СОЗДАТЕЛЬ
 # =========================
-
 
 def creator_question(text):
 
     text = (
-
         text
         .lower()
-        .replace("ё","е")
-
+        .replace("ё", "е")
     )
 
 
-    phrases=[
+    phrases = [
 
         "кто тебя создал",
         "кто твой создатель",
@@ -917,66 +914,58 @@ def creator_question(text):
 
 
     return any(
-
         p in text
-
         for p in phrases
-
     )
 
 
-
-
 # =========================
-# КНОПКА МЕНЮ
+# КНОПКИ
 # =========================
-
 
 async def buttons(
-
     update: Update,
-
     context: ContextTypes.DEFAULT_TYPE
-
 ):
 
-
     query = update.callback_query
-
 
     if not query:
         return
 
 
-
     await query.answer()
 
 
+    user_id = query.from_user.id
 
-    user_id=query.from_user.id
-
-
-    modes[user_id]=query.data
-
+    modes[user_id] = query.data
 
 
     names = {
 
-    "web": "🌐 Веб",
+        "web":
+            "🌐 Веб",
 
-    "ai": "🤖 AI",
+        "ai":
+            "🤖 AI",
 
-    "music": "🎵 Музыка",
+        "music":
+            "🎵 Музыка",
 
-    "video": "🎬 Видео",
+        "video":
+            "🎬 Видео",
 
-    "wiki": "📚 Википедия",
+        "wiki":
+            "📚 Википедия",
 
-    "shop": "🛒 Товары",
+        "shop":
+            "🛒 Товары",
 
-    "maps": "🗺 Карты"
-}
+        "maps":
+            "🗺 Карты"
 
+    }
 
 
     await query.edit_message_text(
@@ -991,10 +980,10 @@ async def buttons(
 
     )
 
+
 # =========================
 # START
 # =========================
-
 
 async def start(
     update: Update,
@@ -1005,14 +994,13 @@ async def start(
 
     save_user(user)
 
-
     modes[user.id] = "web"
 
 
     await update.message.reply_text(
 
         "Привет, меня зовут durikovich!\n\n"
-        "Я поисковый бот с Artificial intelligence.\n"
+        "Я поисковый бот с Artificial Intelligence.\n\n"
         "Выбери режим:",
 
         reply_markup=main_menu()
@@ -1020,11 +1008,9 @@ async def start(
     )
 
 
-
 # =========================
 # HELP
 # =========================
-
 
 async def help_command(
     update: Update,
@@ -1035,7 +1021,7 @@ async def help_command(
 
         "📌 Команды:\n\n"
 
-        "/start — меню\n"
+        "/start — главное меню\n"
         "/help — помощь\n"
         "/ask текст — спросить AI\n"
         "/profile — профиль\n"
@@ -1047,11 +1033,9 @@ async def help_command(
     )
 
 
-
 # =========================
 # СООБЩЕНИЯ
 # =========================
-
 
 async def message(
     update: Update,
@@ -1066,12 +1050,14 @@ async def message(
         return
 
 
-
     text = update.message.text.strip()
 
 
-    user = update.effective_user
+    if not text:
+        return
 
+
+    user = update.effective_user
 
 
     save_user(user)
@@ -1082,61 +1068,57 @@ async def message(
     )
 
 
-
     # ---------------------
     # СОЗДАТЕЛЬ
     # ---------------------
 
-
     if creator_question(text):
 
         await update.message.reply_text(
-
-            f"🤖 Меня создал {OWNER}"
-
+            f"Меня создал {OWNER}, только это наш с тобой секрет..."
         )
 
         return
 
 
+    # ---------------------
+    # ТЕКУЩИЙ РЕЖИМ
+    # ---------------------
 
     mode = modes.get(
-
         user.id,
-
         "web"
-
     )
-
 
 
     # ---------------------
     # AI
     # ---------------------
 
-
     if mode == "ai":
 
         await update.message.reply_text(
-
-            ai_request(
-
-                text,
-
-                user.id
-
-            )
-
+            "🤖 Думаю..."
         )
 
-        return
 
+        answer = ai_request(
+            text,
+            user.id
+        )
+
+
+        await update.message.reply_text(
+            answer
+        )
+
+
+        return
 
 
     # ---------------------
     # МУЗЫКА
     # ---------------------
-
 
     if mode == "music":
 
@@ -1144,18 +1126,18 @@ async def message(
 
             "🎵 Выбери сервис:",
 
-            reply_markup=music_menu(text)
+            reply_markup=music_menu(
+                text
+            )
 
         )
 
         return
 
 
-
     # ---------------------
     # ВИДЕО
     # ---------------------
-
 
     if mode == "video":
 
@@ -1163,307 +1145,206 @@ async def message(
 
             "🎬 Выбери сервис:",
 
-            reply_markup=video_menu(text)
-
-        )
-
-        return
-
-
-
-    # ---------------------
-    # WIKI SHOP MAPS
-    # ---------------------
-
-
-    if mode in [
-
-        "wiki",
-
-        "shop",
-
-        "maps"
-
-    ]:
-
-
-        await update.message.reply_text(
-
-            "🔎 Результаты:",
-
-            reply_markup=other_menu(
-
-                text,
-
-                mode
-
+            reply_markup=video_menu(
+                text
             )
 
         )
 
-
         return
 
 
+    # ---------------------
+    # WIKI / SHOP / MAPS
+    # ---------------------
+
+    if mode in [
+
+        "wiki",
+        "shop",
+        "maps"
+
+    ]:
+
+        await update.message.reply_text(
+
+            "Вот что я нашел:",
+
+            reply_markup=other_menu(
+                text,
+                mode
+            )
+
+        )
+
+        return
 
 
     # ---------------------
     # WEB
     # ---------------------
 
-
     await update.message.reply_text(
 
-        "🌐 Поиск:",
+        "Гуглю:",
 
-        reply_markup=web_search(text)
+        reply_markup=web_search(
+            text
+        )
 
     )
-
-
 
 
 # =========================
 # ERROR
 # =========================
 
-
 async def error_handler(
-
     update,
-
     context
-
 ):
 
     print(
-
         "ERROR:",
-
         context.error
-
     )
-
-
 
 
 # =========================
 # ЗАПУСК
 # =========================
 
-
 def run():
-
 
     if not BOT_TOKEN:
 
-
         raise RuntimeError(
-
-            "BOT_TOKEN не найден"
-
+            "❌ BOT_TOKEN не найден"
         )
-
 
 
     init_db()
 
 
-
     threading.Thread(
-
         target=run_flask,
-
         daemon=True
-
     ).start()
-
-
 
 
     application = (
 
         Application
-
         .builder()
-
         .token(BOT_TOKEN)
-
         .build()
 
     )
 
 
-
+    # Команды
 
     application.add_handler(
-
         CommandHandler(
-
             "start",
-
             start
-
         )
-
     )
 
 
-
     application.add_handler(
-
         CommandHandler(
-
             "help",
-
             help_command
-
         )
-
     )
 
 
-
     application.add_handler(
-
         CommandHandler(
-
             "ask",
-
             ask
-
         )
-
     )
 
 
-
     application.add_handler(
-
         CommandHandler(
-
             "profile",
-
             profile
-
         )
-
     )
 
 
-
     application.add_handler(
-
         CommandHandler(
-
             "history",
-
             history_command
-
         )
-
     )
 
 
-
     application.add_handler(
-
         CommandHandler(
-
             "favorite",
-
             favorite
-
         )
-
     )
 
 
-
     application.add_handler(
-
         CommandHandler(
-
             "favorites",
-
             favorites
-
         )
-
     )
 
 
-
     application.add_handler(
-
         CommandHandler(
-
             "clear",
-
             clear_ai
-
         )
-
     )
 
 
+    # Кнопки
 
     application.add_handler(
-
         CallbackQueryHandler(
-
             buttons
-
         )
-
     )
 
 
+    # Обычные сообщения
 
     application.add_handler(
-
         MessageHandler(
-
             filters.TEXT & ~filters.COMMAND,
-
             message
-
         )
-
     )
-
 
 
     application.add_error_handler(
-
         error_handler
-
     )
 
 
-
-    print(
-
-        "BOT STARTED"
-
-    )
-
+    print("BOT STARTED")
 
 
     application.run_polling(
-
         drop_pending_updates=True
-
     )
-
-
 
 
 # =========================
 # MAIN
 # =========================
 
-
 if __name__ == "__main__":
 
     run()
+```
