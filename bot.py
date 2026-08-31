@@ -299,13 +299,14 @@ def web_search(text):
                 url=f"https://www.google.com/search?q={q}"
             )
         ],
+        
 
         [
             InlineKeyboardButton(
                 "🔎 Яндекс",
                 url=f"https://yandex.ru/search{q}"
             )
-        ],
+        ]
 
         
 
