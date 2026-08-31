@@ -101,22 +101,27 @@ def main_menu():
 
 def music_menu(text: str):
     query = encode(text)
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton(
-            "🎵 Spotify",
-            url=f"https://open.spotify.com/search/{query}",
-        )],
-        [InlineKeyboardButton(
-            "🎵 Яндекс Музыка",
-            url=f"https://music.yandex.ru/search?text={query}",
-        )],
-        [InlineKeyboardButton(
-            "🎵 VK Музыка",
-            # VK's general search is more reliable than the old audio URL.
-            url=f"https://vk.com/search?section=audio&q={query}",
-        )],
-    ])
 
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(
+                "🎵 Spotify",
+                url=f"https://open.spotify.com/search/{query}"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "🎵 Яндекс Музыка",
+                url=f"https://music.yandex.ru/search?text={query}"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "🎵 VK Музыка",
+                url=f"https://vk.com/music/search?section=audio&q={query}"
+            )
+        ]
+    ])
 
 def video_menu(text: str):
     query = encode(text)
