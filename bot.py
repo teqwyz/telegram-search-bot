@@ -2,13 +2,16 @@ import os
 import threading
 import requests
 
+
 from flask import Flask
+
 
 from telegram import (
     Update,
     InlineKeyboardButton,
     InlineKeyboardMarkup
 )
+
 
 from telegram.ext import (
     Application,
@@ -18,6 +21,7 @@ from telegram.ext import (
     ContextTypes,
     filters
 )
+
 
 
 # =====================
@@ -36,9 +40,24 @@ PORT = int(
 OWNER = "@teqwyz"
 
 
+
 app = Flask(__name__)
 
+
+# режимы пользователей
+
 modes = {}
+
+
+# история запросов
+
+history = {}
+
+
+
+# избранное
+
+favorites = {}
 
 
 
@@ -51,17 +70,22 @@ modes = {}
 @app.route("/")
 def home():
 
-    return "🤖 Smart Telegram Search Bot Online"
+    return "🤖 Smart Search Bot Online"
 
 
 
 def run_flask():
 
     app.run(
+
         host="0.0.0.0",
+
         port=PORT,
+
         debug=False,
+
         use_reloader=False
+
     )
 
 
@@ -75,9 +99,80 @@ def run_flask():
 def encode(text):
 
     return requests.utils.quote(
+
         text,
+
         safe=""
+
     )
+
+
+
+
+
+# =====================
+# ИСПРАВЛЕНИЕ ОПЕЧАТОК
+# =====================
+
+REPLACE_WORDS = {
+
+
+    "ютуб":
+    "youtube",
+
+
+    "ютубе":
+    "youtube",
+
+
+    "ютубчик":
+    "youtube",
+
+
+    "айфон":
+    "iphone",
+
+
+    "афон":
+    "iphone",
+
+
+    "озон":
+    "ozon",
+
+
+    "озончик":
+    "ozon",
+
+
+    "вк":
+    "vk"
+
+}
+
+
+
+
+
+def fix_text(text):
+
+    text = text.lower()
+
+
+
+    for old, new in REPLACE_WORDS.items():
+
+        text = text.replace(
+
+            old,
+
+            new
+
+        )
+
+
+
+    return text
 
 
 
@@ -87,55 +182,96 @@ def encode(text):
 # УМНЫЙ ПОИСК
 # =====================
 
+
 SEARCH_RULES = {
 
+
     "music": [
+
         "песня",
+
         "трек",
+
         "альбом",
+
         "исполнитель",
+
         "музыка",
+
         "слушать"
+
     ],
+
 
 
     "video": [
+
         "фильм",
+
         "сериал",
+
         "видео",
-        "ютуб",
+
         "youtube",
+
         "трейлер",
+
         "смотреть"
+
     ],
+
 
 
     "shop": [
+
         "купить",
+
         "цена",
+
         "стоимость",
+
         "заказать",
+
         "магазин",
+
         "руб",
-        "₽"
+
+        "iphone",
+
+        "ozon"
+
     ],
+
 
 
     "wiki": [
+
         "кто",
+
         "что такое",
+
         "история",
+
         "биография",
+
         "значение"
+
     ],
 
 
+
     "maps": [
+
         "где",
+
         "адрес",
+
         "рядом",
+
         "место",
+
         "найти"
+
     ]
 
 }
@@ -144,12 +280,16 @@ SEARCH_RULES = {
 
 
 
+
 def smart_search(text):
 
-    text = text.lower()
+
+    text = fix_text(text)
+
 
 
     scores = {}
+
 
 
     for mode, words in SEARCH_RULES.items():
@@ -157,56 +297,154 @@ def smart_search(text):
         score = 0
 
 
+
         for word in words:
 
             if word in text:
+
                 score += 1
+
 
 
         scores[mode] = score
 
 
 
-    best = max(
+
+    result = sorted(
+
         scores,
-        key=scores.get
+
+        key=scores.get,
+
+        reverse=True
+
     )
 
 
-    if scores[best] == 0:
 
-        return "web"
-
-
-    return best
+    found = []
 
 
 
+    for mode in result:
+
+        if scores[mode] > 0:
+
+            found.append(mode)
 
 
-def category_name(mode):
 
-    names = {
+    if not found:
 
-        "web": "🌐 Интернет",
+        return [
 
-        "music": "🎵 Музыка",
+            "web"
 
-        "video": "🎬 Видео",
-
-        "wiki": "📚 Знания",
-
-        "shop": "🛒 Покупки",
-
-        "maps": "🗺 Карты"
-
-    }
+        ]
 
 
-    return names.get(
-        mode,
-        "🌐 Интернет"
+
+    return found
+
+
+
+
+
+# =====================
+# НАЗВАНИЯ КАТЕГОРИЙ
+# =====================
+
+
+CATEGORY_NAMES = {
+
+
+    "web":
+    "🌐 Интернет",
+
+
+    "music":
+    "🎵 Музыка",
+
+
+    "video":
+    "🎬 Видео",
+
+
+    "wiki":
+    "📚 Знания",
+
+
+    "shop":
+    "🛒 Покупки",
+
+
+    "maps":
+    "🗺 Карты"
+
+}
+
+
+
+
+
+def category_text(categories):
+
+
+    result = []
+
+
+
+    for item in categories:
+
+        result.append(
+
+            CATEGORY_NAMES.get(
+
+                item,
+
+                item
+
+            )
+
+        )
+
+
+
+    return "\n".join(result)
+
+
+
+
+
+# =====================
+# СОХРАНЕНИЕ ИСТОРИИ
+# =====================
+
+
+def add_history(
+    user_id,
+    text
+):
+
+
+    if user_id not in history:
+
+        history[user_id] = []
+
+
+
+    history[user_id].insert(
+
+        0,
+
+        text
+
     )
+
+
+
+    history[user_id] = history[user_id][:10]
 
 
 
@@ -216,67 +454,96 @@ def category_name(mode):
 # ГЛАВНОЕ МЕНЮ
 # =====================
 
+
 def main_menu():
+
 
     return InlineKeyboardMarkup([
 
+
         [
 
             InlineKeyboardButton(
+
                 "🌐 Интернет",
+
                 callback_data="web"
+
             ),
 
+
             InlineKeyboardButton(
+
                 "🎵 Музыка",
+
                 callback_data="music"
+
             )
 
         ],
 
 
+
         [
 
             InlineKeyboardButton(
+
                 "🎬 Видео",
+
                 callback_data="video"
+
             ),
 
+
             InlineKeyboardButton(
+
                 "📚 Знания",
+
                 callback_data="wiki"
+
             )
 
         ],
 
 
+
         [
 
             InlineKeyboardButton(
+
                 "🛒 Покупки",
+
                 callback_data="shop"
+
             ),
 
+
             InlineKeyboardButton(
+
                 "🗺 Карты",
+
                 callback_data="maps"
+
             )
 
         ]
 
     ])
 
-
-
-
+# =====================
+# КНОПКА НАЗАД
+# =====================
 
 def back_button():
 
     return [
 
         InlineKeyboardButton(
+
             "⬅ Главное меню",
+
             callback_data="menu"
+
         )
 
     ]
@@ -286,7 +553,7 @@ def back_button():
 
 
 # =====================
-# ВЕБ ПОИСК
+# WEB ПОИСК
 # =====================
 
 def web_search(text):
@@ -300,8 +567,11 @@ def web_search(text):
         [
 
             InlineKeyboardButton(
+
                 "🔎 Google",
+
                 url=f"https://www.google.com/search?q={q}"
+
             )
 
         ],
@@ -310,8 +580,11 @@ def web_search(text):
         [
 
             InlineKeyboardButton(
+
                 "🔎 Яндекс",
+
                 url=f"https://yandex.ru/search/?text={q}"
+
             )
 
         ],
@@ -320,8 +593,11 @@ def web_search(text):
         [
 
             InlineKeyboardButton(
+
                 "🔎 Bing",
+
                 url=f"https://www.bing.com/search?q={q}"
+
             )
 
         ],
@@ -330,6 +606,10 @@ def web_search(text):
         back_button()
 
     ])
+
+
+
+
 
 # =====================
 # МУЗЫКА
@@ -342,32 +622,45 @@ def music_menu(text):
 
     return InlineKeyboardMarkup([
 
+
         [
 
             InlineKeyboardButton(
+
                 "🎵 Spotify",
+
                 url=f"https://open.spotify.com/search/{q}"
+
             )
 
         ],
 
+
         [
 
             InlineKeyboardButton(
+
                 "🎵 Яндекс Музыка",
+
                 url=f"https://music.yandex.ru/search?text={q}"
+
             )
 
         ],
+
 
         [
 
             InlineKeyboardButton(
+
                 "🎵 VK Музыка",
+
                 url=f"https://vk.com/audio?section=search&q={q}"
+
             )
 
         ],
+
 
         back_button()
 
@@ -388,32 +681,45 @@ def video_menu(text):
 
     return InlineKeyboardMarkup([
 
+
         [
 
             InlineKeyboardButton(
+
                 "▶ YouTube",
+
                 url=f"https://www.youtube.com/results?search_query={q}"
+
             )
 
         ],
 
+
         [
 
             InlineKeyboardButton(
+
                 "▶ VK Видео",
+
                 url=f"https://vk.com/video?q={q}"
+
             )
 
         ],
+
 
         [
 
             InlineKeyboardButton(
+
                 "▶ Rutube",
+
                 url=f"https://rutube.ru/search/?query={q}"
+
             )
 
         ],
+
 
         back_button()
 
@@ -432,36 +738,50 @@ def other_menu(text, mode):
     q = encode(text)
 
 
+
     links = {
 
 
         "wiki": [
 
             (
+
                 "📚 Википедия",
+
                 f"https://ru.wikipedia.org/wiki/{q}"
+
             )
 
         ],
 
 
+
         "shop": [
 
             (
+
                 "🛒 Ozon",
+
                 f"https://www.ozon.ru/search/?text={q}"
+
             ),
 
 
             (
+
                 "🛒 Wildberries",
+
                 f"https://www.wildberries.ru/catalog/0/search.aspx?search={q}"
+
             ),
 
 
             (
+
                 "🛒 Яндекс Маркет",
+
                 f"https://market.yandex.ru/search?text={q}"
+
             )
 
         ],
@@ -471,20 +791,29 @@ def other_menu(text, mode):
         "maps": [
 
             (
+
                 "🗺 Google Maps",
+
                 f"https://www.google.com/maps/search/?api=1&query={q}"
+
             ),
 
 
             (
+
                 "🗺 Яндекс Карты",
+
                 f"https://yandex.ru/maps/?text={q}"
+
             ),
 
 
             (
+
                 "🗺 2ГИС",
+
                 f"https://2gis.ru/search/{q}"
+
             )
 
         ]
@@ -492,27 +821,116 @@ def other_menu(text, mode):
     }
 
 
+
+
     buttons = []
+
 
 
     for name, url in links.get(mode, []):
 
-        buttons.append(
 
-            [
+        buttons.append([
 
-                InlineKeyboardButton(
-                    name,
-                    url=url
-                )
 
-            ]
+            InlineKeyboardButton(
 
-        )
+                name,
+
+                url=url
+
+            )
+
+
+        ])
+
+
 
 
     buttons.append(
+
         back_button()
+
+    )
+
+
+
+    return InlineKeyboardMarkup(buttons)
+
+
+
+
+
+# =====================
+# КРАСИВАЯ КАРТОЧКА
+# =====================
+
+def result_card(
+    text,
+    categories
+):
+
+
+    return (
+
+        "╭━━━━━━━━━━━━╮\n"
+
+        " 🧠 SMART SEARCH\n"
+
+        "╰━━━━━━━━━━━━╯\n\n"
+
+        f"🔎 Запрос:\n"
+        f"{text}\n\n"
+
+        "📂 Найдено:\n"
+
+        f"{category_text(categories)}\n\n"
+
+        "Выберите действие 👇"
+
+    )
+
+
+
+
+
+# =====================
+# ПОКАЗ НЕСКОЛЬКИХ КАТЕГОРИЙ
+# =====================
+
+def multi_menu(
+    text,
+    categories
+):
+
+
+    buttons = []
+
+
+
+    for category in categories:
+
+
+        buttons.append([
+
+
+            InlineKeyboardButton(
+
+                CATEGORY_NAMES[category],
+
+                callback_data=f"search_{category}"
+
+            )
+
+
+        ])
+
+
+
+    buttons.append(
+
+        back_button()
+
     )
 
 
@@ -523,7 +941,31 @@ def other_menu(text, mode):
 
 
 # =====================
-# КНОПКИ
+# ИЗБРАННОЕ
+# =====================
+
+def add_favorite(
+    user_id,
+    site
+):
+
+
+    if user_id not in favorites:
+
+        favorites[user_id] = []
+
+
+
+    if site not in favorites[user_id]:
+
+        favorites[user_id].append(site)
+
+
+
+
+
+# =====================
+# CALLBACK КНОПКИ
 # =====================
 
 async def buttons(
@@ -531,7 +973,9 @@ async def buttons(
     context: ContextTypes.DEFAULT_TYPE
 ):
 
+
     query = update.callback_query
+
 
 
     if not query:
@@ -539,49 +983,85 @@ async def buttons(
         return
 
 
+
     await query.answer()
+
 
 
     user_id = query.from_user.id
 
 
 
-    if query.data == "menu":
+    data = query.data
 
 
-        modes[user_id] = "web"
+
+
+    if data == "menu":
 
 
         await query.edit_message_text(
 
             "🤖 Главное меню\n\n"
-            "Выбери режим поиска:",
+            "Выберите режим:",
 
             reply_markup=main_menu()
 
         )
+
 
         return
 
 
 
 
-    modes[user_id] = query.data
+
+    if data.startswith("search_"):
+
+
+        mode = data.replace(
+
+            "search_",
+
+            ""
+
+        )
+
+
+        context.user_data["last_mode"] = mode
+
+
+
+        await query.edit_message_text(
+
+            f"✅ Выбрано:\n\n"
+            f"{CATEGORY_NAMES[mode]}\n\n"
+            "Отправьте запрос ещё раз."
+
+        )
+
+
+        return
+
+
+
+
+
+    modes[user_id] = data
+
 
 
     await query.edit_message_text(
 
-        "✅ Режим выбран:\n\n"
-        f"{category_name(query.data)}\n\n"
-        "✏️ Отправь запрос",
+        "✅ Режим установлен:\n\n"
+
+        f"{CATEGORY_NAMES.get(data)}\n\n"
+
+        "✏️ Отправьте запрос",
 
         reply_markup=main_menu()
 
     )
-
-
-
-
 
 # =====================
 # START
@@ -594,17 +1074,19 @@ async def start(
 
     user_id = update.effective_user.id
 
-
-    modes[user_id] = "smart"
-
+    modes[user_id] = "web"
 
 
     await update.message.reply_text(
 
-        "🤖 Привет!\n\n"
-        "Я умный поисковый бот.\n\n"
-        "Просто напиши запрос — "
-        "я сам определю категорию.",
+        "╭━━━━━━━━━━━━╮\n"
+        " 🤖 SMART SEARCH\n"
+        "╰━━━━━━━━━━━━╯\n\n"
+
+        "Я умный поисковый бот.\n"
+        "Без нейросетей — только анализ запроса.\n\n"
+
+        "Выберите категорию:",
 
         reply_markup=main_menu()
 
@@ -615,26 +1097,131 @@ async def start(
 
 
 # =====================
-# ABOUT
+# HISTORY
 # =====================
 
-async def about(
+async def history_command(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
 
+    user_id = update.effective_user.id
+
+
+    items = history.get(
+        user_id,
+        []
+    )
+
+
+    if not items:
+
+        await update.message.reply_text(
+
+            "📜 История пока пустая."
+
+        )
+
+        return
+
+
+
+    text = "📜 Последние запросы:\n\n"
+
+
+
+    for i, item in enumerate(
+        items,
+        1
+    ):
+
+        text += f"{i}. {item}\n"
+
+
+
+    await update.message.reply_text(text)
+
+
+
+
+
+# =====================
+# FAVORITE
+# =====================
+
+async def favorite_command(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    user_id = update.effective_user.id
+
+
+    items = favorites.get(
+
+        user_id,
+
+        []
+
+    )
+
+
+    if not items:
+
+
+        await update.message.reply_text(
+
+            "⭐ Избранное пустое."
+
+        )
+
+
+        return
+
+
+
+    text = "⭐ Избранные сайты:\n\n"
+
+
+    for item in items:
+
+        text += f"• {item}\n"
+
+
+
+    await update.message.reply_text(text)
+
+
+
+
+
+# =====================
+# ABOUT
+# =====================
+
+async def about_command(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+
     await update.message.reply_text(
 
         "🤖 Smart Search Bot\n\n"
-        f"Создатель: {OWNER}\n\n"
-        "Функции:\n"
+
+        "Создатель: "
+        f"{OWNER}\n\n"
+
+        "Возможности:\n"
+
         "🌐 Интернет\n"
         "🎵 Музыка\n"
         "🎬 Видео\n"
-        "📚 Википедия\n"
+        "📚 Знания\n"
         "🛒 Покупки\n"
         "🗺 Карты\n\n"
-        "Работает без нейросетей."
+
+        "Умный поиск работает без ИИ."
 
     )
 
@@ -643,7 +1230,7 @@ async def about(
 
 
 # =====================
-# ОБРАБОТКА СООБЩЕНИЙ
+# ОБРАБОТКА ТЕКСТА
 # =====================
 
 async def message(
@@ -651,12 +1238,15 @@ async def message(
     context: ContextTypes.DEFAULT_TYPE
 ):
 
+
     if not update.message:
 
         return
 
 
+
     text = update.message.text
+
 
 
     if not text:
@@ -669,19 +1259,51 @@ async def message(
 
 
 
-    # умный поиск
+    add_history(
 
-    mode = smart_search(text)
+        user_id,
 
-
-
-    info = (
-
-        "🧠 Умный поиск\n\n"
-        f"🔎 Запрос:\n{text}\n\n"
-        f"📂 Категория:\n{category_name(mode)}"
+        text
 
     )
+
+
+
+    categories = smart_search(text)
+
+
+
+    if len(categories) > 1:
+
+
+        await update.message.reply_text(
+
+            result_card(
+
+                text,
+
+                categories
+
+            ),
+
+            reply_markup=multi_menu(
+
+                text,
+
+                categories
+
+            )
+
+        )
+
+
+        return
+
+
+
+
+
+    mode = categories[0]
 
 
 
@@ -690,11 +1312,12 @@ async def message(
 
         await update.message.reply_text(
 
-            info,
+            "🌐 Поиск:",
 
             reply_markup=web_search(text)
 
         )
+
 
 
     elif mode == "music":
@@ -702,11 +1325,12 @@ async def message(
 
         await update.message.reply_text(
 
-            info,
+            "🎵 Музыка:",
 
             reply_markup=music_menu(text)
 
         )
+
 
 
     elif mode == "video":
@@ -714,11 +1338,12 @@ async def message(
 
         await update.message.reply_text(
 
-            info,
+            "🎬 Видео:",
 
             reply_markup=video_menu(text)
 
         )
+
 
 
     else:
@@ -726,11 +1351,14 @@ async def message(
 
         await update.message.reply_text(
 
-            info,
+            "🔎 Результаты:",
 
             reply_markup=other_menu(
+
                 text,
+
                 mode
+
             )
 
         )
@@ -749,8 +1377,11 @@ async def error_handler(
 ):
 
     print(
+
         "ERROR:",
-        context.error
+
+        repr(context.error)
+
     )
 
 
@@ -758,7 +1389,7 @@ async def error_handler(
 
 
 # =====================
-# ЗАПУСК
+# RUN
 # =====================
 
 def run():
@@ -766,8 +1397,11 @@ def run():
 
     if not BOT_TOKEN:
 
+
         raise RuntimeError(
+
             "BOT_TOKEN не найден"
+
         )
 
 
@@ -785,41 +1419,84 @@ def run():
     application = (
 
         Application
+
         .builder()
+
         .token(BOT_TOKEN)
+
         .build()
 
     )
 
 
 
+
     application.add_handler(
 
         CommandHandler(
+
             "start",
+
             start
+
         )
 
     )
+
 
 
     application.add_handler(
 
         CommandHandler(
-            "about",
-            about
+
+            "history",
+
+            history_command
+
         )
 
     )
+
+
+
+    application.add_handler(
+
+        CommandHandler(
+
+            "favorite",
+
+            favorite_command
+
+        )
+
+    )
+
+
+
+    application.add_handler(
+
+        CommandHandler(
+
+            "about",
+
+            about_command
+
+        )
+
+    )
+
 
 
     application.add_handler(
 
         CallbackQueryHandler(
+
             buttons
+
         )
 
     )
+
 
 
     application.add_handler(
@@ -835,6 +1512,7 @@ def run():
     )
 
 
+
     application.add_error_handler(
 
         error_handler
@@ -844,7 +1522,9 @@ def run():
 
 
     print(
+
         "✅ SMART SEARCH BOT STARTED"
+
     )
 
 
