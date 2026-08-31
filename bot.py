@@ -29,8 +29,8 @@ from telegram.ext import (
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
-DEEPSEEK_API_KEY = os.getenv(
-    "DEEPSEEK_API_KEY"
+OPENAI_API_KEY = os.getenv(
+    "OPENAI_API_KEY"
 )
 
 PORT = int(
@@ -395,20 +395,15 @@ def main_menu():
     ])
 
 # =========================
-# AI DEEPSEEK
+# AI OPENAI
 # =========================
 
+def ai_request(text, user_id):
 
-def ai_request(
-    text,
-    user_id
-):
-
-    if not DEEPSEEK_API_KEY:
-
+    if not OPENAI_API_KEY:
         return (
-            "❌ Не найден DEEPSEEK_API_KEY\n\n"
-            "Добавь ключ в Environment Variables Render"
+            "❌ Нет OPENAI_API_KEY\n\n"
+            "Добавь ключ OpenAI в Render → Environment"
         )
 
 
@@ -419,66 +414,55 @@ def ai_request(
 
 
     history.append(
-
         {
             "role": "user",
             "content": text
         }
-
     )
 
 
-    history = history[-10:]
+    messages = [
+
+        {
+            "role": "system",
+            "content":
+            "Ты умный Telegram помощник. "
+            "Отвечай на русском языке."
+        }
+
+    ] + history[-10:]
 
 
     try:
 
         response = requests.post(
 
-            "https://api.deepseek.com/chat/completions",
+            "https://api.openai.com/v1/chat/completions",
 
             headers={
 
                 "Authorization":
-                f"Bearer {DEEPSEEK_API_KEY}",
+                f"Bearer {OPENAI_API_KEY}",
 
                 "Content-Type":
                 "application/json"
 
             },
 
+
             json={
 
                 "model":
-                "deepseek-chat",
-
+                "gpt-4o-mini",
 
                 "messages":
-
-                [
-
-                    {
-
-                        "role":
-                        "system",
-
-                        "content":
-                        (
-                            "Ты умный помощник в Telegram. "
-                            "Отвечай кратко и понятно."
-                        )
-
-                    }
-
-                ]
-
-                +
-
-                history,
-
+                messages,
 
                 "temperature":
-                0.7
+                0.7,
+
+                "max_tokens":
+                1000
 
             },
 
@@ -491,52 +475,35 @@ def ai_request(
         data = response.json()
 
 
-
         if "choices" not in data:
 
-
             return (
-
-                "❌ Ошибка DeepSeek:\n\n"
-
-                +
-
-                str(data)
-
+                "❌ Ошибка OpenAI:\n"
+                + str(data)
             )
 
 
-
         answer = (
-
             data["choices"][0]
-
             ["message"]
-
             ["content"]
-
         )
-
 
 
         history.append(
 
             {
-
                 "role":
                 "assistant",
 
                 "content":
                 answer
-
             }
 
         )
 
 
-
-        ai_memory[user_id] = history
-
+        ai_memory[user_id] = history[-10:]
 
 
         return answer
@@ -545,18 +512,10 @@ def ai_request(
 
     except Exception as e:
 
-
         return (
-
-            "❌ Ошибка подключения AI:\n"
-
-            +
-
-            str(e)
-
+            "❌ Ошибка подключения:\n"
+            + str(e)
         )
-
-
 
 
 
@@ -1044,26 +1003,11 @@ def music_menu(text):
         ],
 
 
-
         [
 
             InlineKeyboardButton(
 
-                "🎵 VK Музыка 📱",
-
-                url=f"vk://vk.com/audio?section=search&q={q}"
-
-            )
-
-        ],
-
-
-
-        [
-
-            InlineKeyboardButton(
-
-                "🌐 VK Музыка браузер",
+                "🎵 VK Музыка",
 
                 url=f"https://vk.com/audio?section=search&q={q}"
 
