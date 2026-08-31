@@ -440,7 +440,7 @@ async def set_mode(
 
     await update.message.reply_text(
 
-        f" {title}? Без проблем.\n\n"
+        f"{title}? Без проблем.\n\n"
         "Что хочешь найти?"
 
     )
@@ -559,8 +559,8 @@ async def buttons(
 
     await query.edit_message_text(
 
-        f"{name}? Не вопрос.\n\n"
-        "Отправь поисковый запрос."
+        f"{name}? Без прооблем.\n\n"
+        "Что хочешь найти?"
 
     )
 
