@@ -137,7 +137,7 @@ def music_menu(text):
         [
             InlineKeyboardButton(
                 "🎵 VK Музыка",
-                url=f"vk://vk.com/audio?section=search&q={q}"
+                url=f"https://vk.com/audio?section=search&q={q}"
             )
         ]
 
@@ -232,7 +232,7 @@ def other_menu(text, mode):
 
             (
                 "🗺 Google Maps",
-                f"https://www.google.com/maps/search/{q}"
+                f"https://www.google.com/maps/search/?api=1&query={q}"
             ),
 
             (
@@ -280,7 +280,7 @@ def web_search(text):
 
         [
             InlineKeyboardButton(
-                "Гуглить",
+                "🔎 Google",
                 url=(
                     "https://www.google.com/search"
                     f"?q={encode(text)}"
@@ -388,8 +388,8 @@ async def buttons(
 
     await query.edit_message_text(
 
-        f"Отличный «{names.get(query.data)}» выбор.\n\n"
-        "Задавай вопросы, я жду."
+        f"«{names.get(query.data, 'Веб поиск')}?» Отличный выбор.\n\n"
+        "."
 
     )
 
@@ -428,8 +428,7 @@ async def message(
 
         await update.message.reply_text(
 
-            f"Ну смотри, меня создал {OWNER}… "
-            "только никому не говори, это наш с тобой секрет"
+            f"Ну смотри, меня создал {OWNER}... только никому не рассказывай, это наш с тобоой секрет..."
 
         )
 
@@ -519,6 +518,21 @@ async def message(
 
 
 # =====================
+# ОШИБКИ
+# =====================
+
+async def error_handler(
+    update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    print(
+        "TELEGRAM ERROR:",
+        repr(context.error)
+    )
+
+
+# =====================
 # ЗАПУСК
 # =====================
 
@@ -579,7 +593,14 @@ def run():
     )
 
 
-    print("BOT STARTED")
+    application.add_error_handler(
+        error_handler
+    )
+
+
+    print(
+        "BOT STARTED"
+    )
 
 
     application.run_polling(
