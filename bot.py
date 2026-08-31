@@ -441,7 +441,7 @@ async def set_mode(
     await update.message.reply_text(
 
         f" {title}? Без проблем.\n\n"
-        "Теперь отправляй поисковый запрос."
+        "Что хочешь найти?"
 
     )
 
