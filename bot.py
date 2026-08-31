@@ -20,6 +20,10 @@ from telegram.ext import (
 )
 
 
+# =====================
+# НАСТРОЙКИ
+# =====================
+
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 PORT = int(os.getenv("PORT", "10000"))
 OWNER = "@teqwyz"
@@ -111,7 +115,7 @@ def main_menu():
 
 
 # =====================
-# МУЗЫКА
+# МЕНЮ МУЗЫКИ
 # =====================
 
 def music_menu(text):
@@ -145,7 +149,7 @@ def music_menu(text):
 
 
 # =====================
-# ВИДЕО
+# МЕНЮ ВИДЕО
 # =====================
 
 def video_menu(text):
@@ -157,7 +161,10 @@ def video_menu(text):
         [
             InlineKeyboardButton(
                 "▶ YouTube",
-                url=f"https://www.youtube.com/results?search_query={q}"
+                url=(
+                    "https://www.youtube.com/results"
+                    f"?search_query={q}"
+                )
             )
         ],
 
@@ -179,7 +186,7 @@ def video_menu(text):
 
 
 # =====================
-# WIKI / SHOP / MAPS
+# ВИКИ / ТОВАРЫ / КАРТЫ
 # =====================
 
 def other_menu(text, mode):
@@ -219,7 +226,10 @@ def other_menu(text, mode):
 
             (
                 "🛒 Wildberries",
-                f"https://www.wildberries.ru/catalog/0/search.aspx?search={q}"
+                (
+                    "https://www.wildberries.ru/catalog/0/"
+                    f"search.aspx?search={q}"
+                )
             )
 
         ],
@@ -232,7 +242,10 @@ def other_menu(text, mode):
 
             (
                 "🗺 Google Maps",
-                f"https://www.google.com/maps/search/?api=1&query={q}"
+                (
+                    "https://www.google.com/maps/search/"
+                    f"?api=1&query={q}"
+                )
             ),
 
             (
@@ -271,20 +284,33 @@ def other_menu(text, mode):
 
 
 # =====================
-# WEB SEARCH
+# ВЕБ ПОИСК
 # =====================
 
 def web_search(text):
+
+    q = encode(text)
 
     return InlineKeyboardMarkup([
 
         [
             InlineKeyboardButton(
-                "Гуглить",
-                url=(
-                    "https://www.google.com/search"
-                    f"?q={encode(text)}"
-                )
+                "🔎 Google",
+                url=f"https://www.google.com/search?q={q}"
+            )
+        ],
+
+        [
+            InlineKeyboardButton(
+                "🔎 Bing",
+                url=f"https://www.bing.com/search?q={q}"
+            )
+        ],
+
+        [
+            InlineKeyboardButton(
+                "🔎 DuckDuckGo",
+                url=f"https://duckduckgo.com/?q={q}"
             )
         ]
 
@@ -292,28 +318,30 @@ def web_search(text):
 
 
 # =====================
-# ВОПРОС О СОЗДАТЕЛЕ
+# ПРОВЕРКА СОЗДАТЕЛЯ
 # =====================
 
 def creator_question(text):
 
-    text = (
+    normalized = (
         text
         .lower()
         .replace("ё", "е")
     )
 
-    phrases = [
+    phrases = (
 
         "кто тебя создал",
         "кто твой создатель",
         "кто тебя сделал",
-        "кто тебя придумал"
+        "кто тебя придумал",
+        "кто создал тебя",
+        "кто сделал тебя"
 
-    ]
+    )
 
     return any(
-        phrase in text
+        phrase in normalized
         for phrase in phrases
     )
 
@@ -336,11 +364,149 @@ async def start(
 
     await update.message.reply_text(
 
-        "Ку! Ну, я тип поисковый бот\n\n"
-        "Так что выбирай что хочешь:",
+        "Ку! Ну я тип поисковый бот.\n\n"
+        "Так что, выбирай, что хочешь искать:",
 
         reply_markup=main_menu()
 
+    )
+
+
+# =====================
+# /HELP
+# =====================
+
+async def help_command(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    await update.message.reply_text(
+
+        "🤖 Помощь\n\n"
+
+        "/start — главное меню\n"
+        "/help — список команд\n"
+        "/about — информация о боте\n\n"
+
+        "🔎 Режимы поиска:\n"
+        "/music — музыка\n"
+        "/video — видео\n"
+        "/wiki — Википедия\n"
+        "/shop — товары\n"
+        "/maps — карты\n\n"
+
+        "Также можно использовать кнопки "
+        "главного меню."
+
+    )
+
+
+# =====================
+# /ABOUT
+# =====================
+
+async def about_command(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    await update.message.reply_text(
+
+        "Я поисковый Telegram-бот\n\n"
+        f"Создатель: {OWNER}\n"
+        "Поддерживаются поиск, музыка, видео, "
+        "Википедия, товары и карты."
+
+    )
+
+
+# =====================
+# УСТАНОВКА РЕЖИМА
+# =====================
+
+async def set_mode(
+    update: Update,
+    mode,
+    title
+):
+
+    if not update.message:
+        return
+
+    modes[
+        update.effective_user.id
+    ] = mode
+
+    await update.message.reply_text(
+
+        f"✅ Режим «{title}» включён.\n\n"
+        "Теперь отправь поисковый запрос."
+
+    )
+
+
+# =====================
+# КОМАНДЫ ПОИСКА
+# =====================
+
+async def music_command(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    await set_mode(
+        update,
+        "music",
+        "🎵 Музыка"
+    )
+
+
+async def video_command(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    await set_mode(
+        update,
+        "video",
+        "🎬 Видео"
+    )
+
+
+async def wiki_command(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    await set_mode(
+        update,
+        "wiki",
+        "📚 Википедия"
+    )
+
+
+async def shop_command(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    await set_mode(
+        update,
+        "shop",
+        "🛒 Товары"
+    )
+
+
+async def maps_command(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    await set_mode(
+        update,
+        "maps",
+        "🗺 Карты"
     )
 
 
@@ -386,15 +552,21 @@ async def buttons(
 
     }
 
+    name = names.get(
+        query.data,
+        "🌐 Веб поиск"
+    )
+
     await query.edit_message_text(
 
-        f"{names.get(query.data, 'Веб поиск')}? Отличный выбор.\n\n"
+        f"{name}? Не вопрос.\n\n"
+        "Отправь поисковый запрос."
 
     )
 
 
 # =====================
-# СООБЩЕНИЯ
+# ОБРАБОТКА СООБЩЕНИЙ
 # =====================
 
 async def message(
@@ -413,7 +585,7 @@ async def message(
     if not text:
 
         await update.message.reply_text(
-            "Я жду."
+            "✏️ Напиши поисковый запрос."
         )
 
         return
@@ -427,7 +599,7 @@ async def message(
 
         await update.message.reply_text(
 
-            f"Ну смотри, меня создал {OWNER}... только никому не рассказывай, это наш с тобой секрет..."
+            f"Ну смотри, меня создал {OWNER}... только не кому не рассказывай, этоо наш с тобой секрет."
 
         )
 
@@ -491,7 +663,7 @@ async def message(
 
         await update.message.reply_text(
 
-            "Ну вот что я нашел:",
+            "🔎 Ну смотри, вот что я нашел:",
 
             reply_markup=other_menu(
                 text,
@@ -509,7 +681,7 @@ async def message(
 
     await update.message.reply_text(
 
-        "🌐 Веб поиск:",
+        "🌐 Выбирай поисковик:",
 
         reply_markup=web_search(text)
 
@@ -522,7 +694,7 @@ async def message(
 
 async def error_handler(
     update,
-    context: ContextTypes.DEFAULT_TYPE
+    context
 ):
 
     print(
@@ -547,7 +719,6 @@ def run():
     threading.Thread(
 
         target=run_flask,
-
         daemon=True
 
     ).start()
@@ -563,15 +734,70 @@ def run():
     )
 
 
-    application.add_handler(
+    # -----------------
+    # КОМАНДЫ
+    # -----------------
 
+    application.add_handler(
         CommandHandler(
             "start",
             start
         )
-
     )
 
+    application.add_handler(
+        CommandHandler(
+            "help",
+            help_command
+        )
+    )
+
+    application.add_handler(
+        CommandHandler(
+            "about",
+            about_command
+        )
+    )
+
+    application.add_handler(
+        CommandHandler(
+            "music",
+            music_command
+        )
+    )
+
+    application.add_handler(
+        CommandHandler(
+            "video",
+            video_command
+        )
+    )
+
+    application.add_handler(
+        CommandHandler(
+            "wiki",
+            wiki_command
+        )
+    )
+
+    application.add_handler(
+        CommandHandler(
+            "shop",
+            shop_command
+        )
+    )
+
+    application.add_handler(
+        CommandHandler(
+            "maps",
+            maps_command
+        )
+    )
+
+
+    # -----------------
+    # КНОПКИ
+    # -----------------
 
     application.add_handler(
 
@@ -581,6 +807,10 @@ def run():
 
     )
 
+
+    # -----------------
+    # ТЕКСТ
+    # -----------------
 
     application.add_handler(
 
@@ -597,9 +827,7 @@ def run():
     )
 
 
-    print(
-        "BOT STARTED"
-    )
+    print("BOT STARTED")
 
 
     application.run_polling(
