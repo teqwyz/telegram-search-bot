@@ -1194,32 +1194,67 @@ def other_menu(text, mode):
 
 
 
-    buttons = []
+    async def buttons(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    query = update.callback_query
+
+    if query is None:
+        return
 
 
+    await query.answer()
 
-    for name, url in links.get(mode, []):
+
+    user_id = query.from_user.id
+
+    mode = query.data
 
 
-        buttons.append(
+    modes[user_id] = mode
 
-            [
 
-                InlineKeyboardButton(
+    names = {
 
-                    name,
+        "web": "🌐 Веб поиск",
 
-                    url=url
+        "ai": "🤖 AI",
 
-                )
+        "music": "🎵 Музыка",
 
-            ]
+        "video": "🎬 Видео",
+
+        "wiki": "📚 Википедия",
+
+        "shop": "🛒 Товары",
+
+        "maps": "🗺 Карты"
+
+    }
+
+
+    try:
+
+        await query.edit_message_text(
+
+            text=(
+                f"✅ Выбран режим: {names.get(mode)}\n\n"
+                "Отправь запрос."
+            ),
+
+            reply_markup=main_menu()
 
         )
 
 
+    except Exception as e:
 
-    return InlineKeyboardMarkup(buttons)
+        print(
+            "BUTTON ERROR:",
+            e
+        )
 
 
 
@@ -1844,14 +1879,11 @@ def run():
 
 
     application.add_handler(
-
-        CallbackQueryHandler(
-
-            buttons
-
-        )
-
+    CallbackQueryHandler(
+        buttons,
+        pattern="^(web|ai|music|video|wiki|shop|maps)$"
     )
+)
 
 
 
