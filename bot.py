@@ -280,7 +280,7 @@ def web_search(text):
 
         [
             InlineKeyboardButton(
-                "🔎 Google",
+                "Гуглить",
                 url=(
                     "https://www.google.com/search"
                     f"?q={encode(text)}"
@@ -388,8 +388,7 @@ async def buttons(
 
     await query.edit_message_text(
 
-        f"«{names.get(query.data, 'Веб поиск')}?» Отличный выбор.\n\n"
-        "."
+        f"{names.get(query.data, 'Веб поиск')}? Отличный выбор.\n\n"
 
     )
 
@@ -428,7 +427,7 @@ async def message(
 
         await update.message.reply_text(
 
-            f"Ну смотри, меня создал {OWNER}... только никому не рассказывай, это наш с тобоой секрет..."
+            f"Ну смотри, меня создал {OWNER}... только никому не рассказывай, это наш с тобой секрет..."
 
         )
 
