@@ -22,24 +22,22 @@ from telegram.ext import (
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 PORT = int(os.getenv("PORT", "10000"))
-
 OWNER = "@teqwyz"
 
-
 app = Flask(__name__)
-
 modes = {}
 
 
+# =====================
+# RENDER / FLASK
+# =====================
 
 @app.route("/")
 def home():
     return "Telegram Search Bot is running!"
 
 
-
 def run_flask():
-
     app.run(
         host="0.0.0.0",
         port=PORT,
@@ -48,14 +46,15 @@ def run_flask():
     )
 
 
+# =====================
+# URL ENCODING
+# =====================
 
 def encode(text):
-
     return requests.utils.quote(
         text,
         safe=""
     )
-
 
 
 # =====================
@@ -111,9 +110,6 @@ def main_menu():
     ])
 
 
-
-
-
 # =====================
 # МУЗЫКА
 # =====================
@@ -141,14 +137,11 @@ def music_menu(text):
         [
             InlineKeyboardButton(
                 "🎵 VK Музыка",
-                url=f"https://vk.ru/audios"
+                url=f"vk://vk.com/audio?section=search&q={q}"
             )
         ]
 
     ])
-
-
-
 
 
 # =====================
@@ -164,14 +157,14 @@ def video_menu(text):
         [
             InlineKeyboardButton(
                 "▶ YouTube",
-                url=f"https://youtube.com/results?search_query={q}"
+                url=f"https://www.youtube.com/results?search_query={q}"
             )
         ],
 
         [
             InlineKeyboardButton(
                 "▶ VK Видео",
-                url=f"https://vk.com/video?q={q}"
+                url=f"https://vk.com/video/search?q={q}"
             )
         ],
 
@@ -185,22 +178,21 @@ def video_menu(text):
     ])
 
 
-
-
-
 # =====================
-# ДРУГИЕ СЕРВИСЫ
+# WIKI / SHOP / MAPS
 # =====================
 
 def other_menu(text, mode):
 
     q = encode(text)
 
-
     links = {
 
+        # -----------------
+        # ВИКИПЕДИЯ
+        # -----------------
 
-        "wiki":[
+        "wiki": [
 
             (
                 "📚 Википедия",
@@ -209,27 +201,34 @@ def other_menu(text, mode):
 
         ],
 
+        # -----------------
+        # ТОВАРЫ
+        # -----------------
 
-        "shop":[
+        "shop": [
 
-    (
-        "🛒 Яндекс Маркет",
-        f"https://market.yandex.ru/search?text={q}"
-    ),
+            (
+                "🛒 Яндекс Маркет",
+                f"https://market.yandex.ru/search?text={q}"
+            ),
 
-    (
-        "🛒 Ozon",
-        f"https://www.ozon.ru/search/?text={q}"
-    ),
+            (
+                "🛒 Ozon",
+                f"https://www.ozon.ru/search/?text={q}"
+            ),
 
-    (
-        "🛒 Wildberries",
-        f"https://www.wildberries.ru/catalog/0/search.aspx?search={q}"
-    )
+            (
+                "🛒 Wildberries",
+                f"https://www.wildberries.ru/catalog/0/search.aspx?search={q}"
+            )
 
-],
+        ],
 
-        "maps":[
+        # -----------------
+        # КАРТЫ
+        # -----------------
+
+        "maps": [
 
             (
                 "🗺 Google Maps",
@@ -239,17 +238,25 @@ def other_menu(text, mode):
             (
                 "🗺 Яндекс Карты",
                 f"https://yandex.ru/maps/?text={q}"
+            ),
+
+            (
+                "🗺 2ГИС",
+                f"https://2gis.ru/search/{q}"
+            ),
+
+            (
+                "🗺 Apple Maps",
+                f"https://maps.apple.com/?q={q}"
             )
 
         ]
 
     }
 
+    buttons = []
 
-    buttons=[]
-
-
-    for name,url in links.get(mode,[]):
+    for name, url in links.get(mode, []):
 
         buttons.append([
 
@@ -260,15 +267,11 @@ def other_menu(text, mode):
 
         ])
 
-
     return InlineKeyboardMarkup(buttons)
 
 
-
-
-
 # =====================
-# WEB ПОИСК
+# WEB SEARCH
 # =====================
 
 def web_search(text):
@@ -276,128 +279,161 @@ def web_search(text):
     return InlineKeyboardMarkup([
 
         [
-
             InlineKeyboardButton(
-
-                "🔎 Открыть Google",
-
-                url=f"https://www.google.com/search?q={encode(text)}"
-
+                "Гуглить",
+                url=(
+                    "https://www.google.com/search"
+                    f"?q={encode(text)}"
+                )
             )
-
         ]
 
     ])
 
 
-
-
-
 # =====================
-# СОЗДАТЕЛЬ
+# ВОПРОС О СОЗДАТЕЛЕ
 # =====================
 
 def creator_question(text):
 
-    t = text.lower().replace(
-        "ё",
-        "е"
+    text = (
+        text
+        .lower()
+        .replace("ё", "е")
     )
 
+    phrases = [
+
+        "кто тебя создал",
+        "кто твой создатель",
+        "кто тебя сделал",
+        "кто тебя придумал"
+
+    ]
 
     return any(
-
-        x in t
-
-        for x in [
-
-            "кто тебя создал",
-
-            "кто твой создатель",
-
-            "кто тебя сделал",
-
-            "кто тебя придумал"
-
-        ]
-
+        phrase in text
+        for phrase in phrases
     )
-
-
-
 
 
 # =====================
-# TELEGRAM
+# /START
 # =====================
 
 async def start(
-    update:Update,
-    context:ContextTypes.DEFAULT_TYPE
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
 ):
+
+    if not update.message:
+        return
 
     modes[
         update.effective_user.id
     ] = "web"
 
-
     await update.message.reply_text(
 
-        "Ку! Ну чо, я тип поисковый бот...\n\nВыбирай что хочешь:",
+        "Ку! Ну, я тип поисковый бот\n\n"
+        "Так что выбирай что хочешь:",
 
         reply_markup=main_menu()
 
     )
 
 
-
-
+# =====================
+# КНОПКИ
+# =====================
 
 async def buttons(
-    update:Update,
-    context:ContextTypes.DEFAULT_TYPE
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
 ):
 
     query = update.callback_query
 
+    if not query:
+        return
 
     await query.answer()
-
 
     modes[
         query.from_user.id
     ] = query.data
 
+    names = {
+
+        "web":
+            "🌐 Веб поиск",
+
+        "music":
+            "🎵 Музыка",
+
+        "video":
+            "🎬 Видео",
+
+        "wiki":
+            "📚 Википедия",
+
+        "shop":
+            "🛒 Товары",
+
+        "maps":
+            "🗺 Карты"
+
+    }
 
     await query.edit_message_text(
 
-        "Хорошый выбор.\nОтправляй запрос."
+        f"Отличный «{names.get(query.data)}» выбор.\n\n"
+        "Задавай вопросы, я жду."
 
     )
 
 
-
-
+# =====================
+# СООБЩЕНИЯ
+# =====================
 
 async def message(
-    update:Update,
-    context:ContextTypes.DEFAULT_TYPE
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
 ):
+
+    if not update.message:
+        return
+
+    if not update.message.text:
+        return
 
     text = update.message.text.strip()
 
+    if not text:
 
+        await update.message.reply_text(
+            "Я жду."
+        )
+
+        return
+
+
+    # -----------------
+    # СОЗДАТЕЛЬ
+    # -----------------
 
     if creator_question(text):
 
         await update.message.reply_text(
 
-            f"Ну смотри, меня создал {OWNER}... только не говори, что это я тебе сказал."
+            f"Ну смотри, меня создал {OWNER}… "
+            "только никому не говори, это наш с тобой секрет"
 
         )
 
         return
-
 
 
     mode = modes.get(
@@ -409,12 +445,15 @@ async def message(
     )
 
 
+    # -----------------
+    # МУЗЫКА
+    # -----------------
 
-    if mode=="music":
+    if mode == "music":
 
         await update.message.reply_text(
 
-            "🎵 Музыка:",
+            "🎵 Выбирай, где будешь слушать музыку:",
 
             reply_markup=music_menu(text)
 
@@ -423,12 +462,15 @@ async def message(
         return
 
 
+    # -----------------
+    # ВИДЕО
+    # -----------------
 
-    if mode=="video":
+    if mode == "video":
 
         await update.message.reply_text(
 
-            "🎬 Видео:",
+            "🎬 Выбирай, где будешь смотреть видосы:",
 
             reply_markup=video_menu(text)
 
@@ -437,21 +479,21 @@ async def message(
         return
 
 
+    # -----------------
+    # WIKI / SHOP / MAPS
+    # -----------------
 
     if mode in [
 
         "wiki",
-
         "shop",
-
         "maps"
 
     ]:
 
-
         await update.message.reply_text(
 
-            "🔎 Поиск:",
+            "Ну вот что я нашел:",
 
             reply_markup=other_menu(
                 text,
@@ -463,6 +505,9 @@ async def message(
         return
 
 
+    # -----------------
+    # WEB
+    # -----------------
 
     await update.message.reply_text(
 
@@ -473,14 +518,17 @@ async def message(
     )
 
 
-
-
-
 # =====================
-# START BOT
+# ЗАПУСК
 # =====================
 
 def run():
+
+    if not BOT_TOKEN:
+
+        raise RuntimeError(
+            "BOT_TOKEN не найден в Environment Variables Render"
+        )
 
 
     threading.Thread(
@@ -492,19 +540,14 @@ def run():
     ).start()
 
 
-
-    application=(
+    application = (
 
         Application
-
         .builder()
-
         .token(BOT_TOKEN)
-
         .build()
 
     )
-
 
 
     application.add_handler(
@@ -517,7 +560,6 @@ def run():
     )
 
 
-
     application.add_handler(
 
         CallbackQueryHandler(
@@ -527,32 +569,28 @@ def run():
     )
 
 
-
     application.add_handler(
 
         MessageHandler(
-
             filters.TEXT & ~filters.COMMAND,
-
             message
-
         )
 
     )
 
 
+    print("BOT STARTED")
 
-    print(
-        "BOT STARTED"
+
+    application.run_polling(
+        drop_pending_updates=True
     )
 
 
-    application.run_polling()
+# =====================
+# MAIN
+# =====================
 
-
-
-
-
-if __name__=="__main__":
+if __name__ == "__main__":
 
     run()
