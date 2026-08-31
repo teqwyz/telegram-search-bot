@@ -21,24 +21,21 @@ from telegram.ext import (
 
 
 # =====================
-# НАСТРОЙКИ
+# SETTINGS
 # =====================
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-
 PORT = int(os.getenv("PORT", "10000"))
 
 OWNER = "@teqwyz"
-
 
 app = Flask(__name__)
 
 modes = {}
 
 
-
 # =====================
-# FLASK RENDER
+# RENDER KEEP ALIVE
 # =====================
 
 @app.route("/")
@@ -47,7 +44,6 @@ def home():
 
 
 def run_flask():
-
     app.run(
         host="0.0.0.0",
         port=PORT,
@@ -56,22 +52,19 @@ def run_flask():
     )
 
 
-
 # =====================
-# URL
+# HELPERS
 # =====================
 
 def encode(text):
-
     return requests.utils.quote(
         text,
         safe=""
     )
 
 
-
 # =====================
-# КРАСИВОЕ ГЛАВНОЕ МЕНЮ
+# MENUS
 # =====================
 
 def main_menu():
@@ -80,36 +73,33 @@ def main_menu():
 
         [
             InlineKeyboardButton(
-                "🌐 Интернет",
+                "🌐 Web",
                 callback_data="web"
             ),
-
             InlineKeyboardButton(
-                "🎵 Музыка",
+                "🎵 Music",
                 callback_data="music"
             )
         ],
 
         [
             InlineKeyboardButton(
-                "🎬 Видео",
+                "🎬 Video",
                 callback_data="video"
             ),
-
             InlineKeyboardButton(
-                "📚 Знания",
+                "📚 Wiki",
                 callback_data="wiki"
             )
         ],
 
         [
             InlineKeyboardButton(
-                "🛒 Покупки",
+                "🛒 Shop",
                 callback_data="shop"
             ),
-
             InlineKeyboardButton(
-                "🗺 Карты",
+                "🗺 Maps",
                 callback_data="maps"
             )
         ]
@@ -117,30 +107,13 @@ def main_menu():
     ])
 
 
-
-def back_menu():
-
-    return InlineKeyboardMarkup([
-
-        [
-            InlineKeyboardButton(
-                "⬅ Главное меню",
-                callback_data="menu"
-            )
-        ]
-
-    ])
-
-
-
 # =====================
-# ПОИСК В ИНТЕРНЕТЕ
+# SEARCH BUTTONS
 # =====================
 
 def web_search(text):
 
     q = encode(text)
-
 
     return InlineKeyboardMarkup([
 
@@ -153,7 +126,7 @@ def web_search(text):
 
         [
             InlineKeyboardButton(
-                "🔎 Яндекс",
+                "🔎 Yandex",
                 url=f"https://yandex.ru/search/?text={q}"
             )
         ],
@@ -167,170 +140,13 @@ def web_search(text):
 
         [
             InlineKeyboardButton(
-                "⬅ Меню",
+                "⬅ Menu",
                 callback_data="menu"
             )
         ]
 
     ])
 
-
-
-# =====================
-# МУЗЫКА
-# =====================
-
-def music_menu(text):
-
-    q = encode(text)
-
-
-    return InlineKeyboardMarkup([
-
-        [
-            InlineKeyboardButton(
-                "🎵 Spotify",
-                url=f"https://open.spotify.com/search/{q}"
-            )
-        ],
-
-        [
-            InlineKeyboardButton(
-                "🎵 Яндекс Музыка",
-                url=f"https://music.yandex.ru/search?text={q}"
-            )
-        ],
-
-        [
-            InlineKeyboardButton(
-                "🎵 VK Музыка",
-                url=f"https://vk.com/audio?section=search&q={q}"
-            )
-        ],
-
-        [
-            InlineKeyboardButton(
-                "⬅ Меню",
-                callback_data="menu"
-            )
-        ]
-
-    ])
-
-
-
-# =====================
-# ВИДЕО
-# =====================
-
-def video_menu(text):
-
-    q = encode(text)
-
-
-    return InlineKeyboardMarkup([
-
-        [
-            InlineKeyboardButton(
-                "▶ YouTube",
-                url=f"https://youtube.com/results?search_query={q}"
-            )
-        ],
-
-        [
-            InlineKeyboardButton(
-                "▶ VK Видео",
-                url=f"https://vk.com/video?q={q}"
-            )
-        ],
-
-        [
-            InlineKeyboardButton(
-                "▶ Rutube",
-                url=f"https://rutube.ru/search/?query={q}"
-            )
-        ],
-
-        [
-            InlineKeyboardButton(
-                "⬅ Меню",
-                callback_data="menu"
-            )
-        ]
-
-    ])
-
-# =====================
-# КРАСИВОЕ ГЛАВНОЕ МЕНЮ
-# =====================
-
-def main_menu():
-
-    return InlineKeyboardMarkup([
-
-        [
-            InlineKeyboardButton(
-                "🌐 Веб",
-                callback_data="web"
-            ),
-            InlineKeyboardButton(
-                "🎵 Музыка",
-                callback_data="music"
-            )
-        ],
-
-        [
-            InlineKeyboardButton(
-                "🎬 Видео",
-                callback_data="video"
-            ),
-            InlineKeyboardButton(
-                "📚 Wiki",
-                callback_data="wiki"
-            )
-        ],
-
-        [
-            InlineKeyboardButton(
-                "🛒 Товары",
-                callback_data="shop"
-            ),
-            InlineKeyboardButton(
-                "🗺 Карты",
-                callback_data="maps"
-            )
-        ]
-
-    ])
-
-
-
-
-
-# =====================
-# КНОПКА НАЗАД
-# =====================
-
-def back_menu():
-
-    return InlineKeyboardMarkup([
-
-        [
-            InlineKeyboardButton(
-                "⬅️ Главное меню",
-                callback_data="back"
-            )
-        ]
-
-    ])
-
-
-
-
-
-# =====================
-# МУЗЫКА
-# =====================
 
 def music_menu(text):
 
@@ -347,34 +163,27 @@ def music_menu(text):
 
         [
             InlineKeyboardButton(
-                "🎵 Яндекс Музыка",
+                "🎵 Yandex Music",
                 url=f"https://music.yandex.ru/search?text={q}"
             )
         ],
 
         [
             InlineKeyboardButton(
-                "🎵 VK Музыка",
+                "🎵 VK Music",
                 url=f"https://vk.com/audio?section=search&q={q}"
             )
         ],
 
         [
             InlineKeyboardButton(
-                "⬅️ Назад",
-                callback_data="back"
+                "⬅ Menu",
+                callback_data="menu"
             )
         ]
 
     ])
 
-
-
-
-
-# =====================
-# ВИДЕО
-# =====================
 
 def video_menu(text):
 
@@ -391,7 +200,7 @@ def video_menu(text):
 
         [
             InlineKeyboardButton(
-                "▶ VK Видео",
+                "▶ VK Video",
                 url=f"https://vk.com/video?q={q}"
             )
         ],
@@ -405,16 +214,13 @@ def video_menu(text):
 
         [
             InlineKeyboardButton(
-                "⬅️ Назад",
-                callback_data="back"
+                "⬅ Menu",
+                callback_data="menu"
             )
         ]
 
     ])
 
-# =====================
-# WIKI / ТОВАРЫ / КАРТЫ
-# =====================
 
 def other_menu(text, mode):
 
@@ -424,13 +230,13 @@ def other_menu(text, mode):
 
         "wiki": [
             (
-                "📚 Википедия",
+                "📚 Wikipedia",
                 f"https://ru.wikipedia.org/wiki/{q}"
             )
         ],
 
-
         "shop": [
+
             (
                 "🛒 Ozon",
                 f"https://www.ozon.ru/search/?text={q}"
@@ -442,11 +248,11 @@ def other_menu(text, mode):
             ),
 
             (
-                "🛒 Яндекс Маркет",
+                "🛒 Yandex Market",
                 f"https://market.yandex.ru/search?text={q}"
             )
-        ],
 
+        ],
 
         "maps": [
 
@@ -456,12 +262,12 @@ def other_menu(text, mode):
             ),
 
             (
-                "🗺 Яндекс Карты",
+                "🗺 Yandex Maps",
                 f"https://yandex.ru/maps/?text={q}"
             ),
 
             (
-                "🗺 2ГИС",
+                "🗺 2GIS",
                 f"https://2gis.ru/search/{q}"
             )
 
@@ -487,7 +293,7 @@ def other_menu(text, mode):
     buttons.append(
         [
             InlineKeyboardButton(
-                "⬅️ Главное меню",
+                "⬅ Menu",
                 callback_data="menu"
             )
         ]
@@ -496,11 +302,71 @@ def other_menu(text, mode):
 
     return InlineKeyboardMarkup(buttons)
 
+# =====================
+# START
+# =====================
 
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    if not update.message:
+        return
+
+    modes[update.effective_user.id] = "web"
+
+    await update.message.reply_text(
+
+        "🤖 Привет!\n\n"
+        "Я поисковый Telegram-бот.\n"
+        "Выбери режим поиска:",
+
+        reply_markup=main_menu()
+
+    )
 
 
 # =====================
-# КНОПКИ
+# HELP
+# =====================
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    await update.message.reply_text(
+
+        "📌 Команды:\n\n"
+
+        "/start — главное меню\n"
+        "/help — помощь\n"
+        "/about — информация\n\n"
+
+        "Также можно использовать кнопки меню."
+
+    )
+
+
+# =====================
+# ABOUT
+# =====================
+
+async def about(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    await update.message.reply_text(
+
+        "🤖 Telegram Search Bot\n\n"
+        f"Создатель: {OWNER}\n\n"
+
+        "Функции:\n"
+        "🌐 Web поиск\n"
+        "🎵 Музыка\n"
+        "🎬 Видео\n"
+        "📚 Википедия\n"
+        "🛒 Магазины\n"
+        "🗺 Карты"
+
+    )
+
+
+# =====================
+# CALLBACK BUTTONS
 # =====================
 
 async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -525,7 +391,7 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(
 
             "🤖 Главное меню\n\n"
-            "Выбери режим поиска:",
+            "Выбери режим:",
 
             reply_markup=main_menu()
 
@@ -534,17 +400,16 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
 
-
     modes[user_id] = query.data
 
 
     names = {
 
-        "web": "🌐 Веб поиск",
+        "web": "🌐 Web",
         "music": "🎵 Музыка",
         "video": "🎬 Видео",
-        "wiki": "📚 Википедия",
-        "shop": "🛒 Товары",
+        "wiki": "📚 Wiki",
+        "shop": "🛒 Покупки",
         "maps": "🗺 Карты"
 
     }
@@ -552,7 +417,7 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await query.edit_message_text(
 
-        "✅ Выбран режим:\n\n"
+        "✅ Режим выбран:\n\n"
         f"{names.get(query.data)}\n\n"
         "✏️ Теперь отправь запрос",
 
@@ -561,10 +426,8 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-
-
 # =====================
-# ОБРАБОТКА СООБЩЕНИЙ
+# MESSAGE HANDLER
 # =====================
 
 async def message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -573,7 +436,11 @@ async def message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
 
-    text = update.message.text
+    if not update.message.text:
+        return
+
+
+    text = update.message.text.strip()
 
 
     if not text:
@@ -592,60 +459,64 @@ async def message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if mode == "web":
 
         await update.message.reply_text(
-            "🌐 Поисковики:",
+
+            "🌐 Выбери поисковик:",
+
             reply_markup=web_search(text)
+
         )
 
 
-    elif mode in [
-        "music",
-        "video"
-    ]:
+    elif mode == "music":
 
-        if mode == "music":
+        await update.message.reply_text(
 
-            await update.message.reply_text(
-                "🎵 Где искать музыку:",
-                reply_markup=music_menu(text)
-            )
+            "🎵 Выбери сервис:",
 
-        else:
+            reply_markup=music_menu(text)
 
-            await update.message.reply_text(
-                "🎬 Где искать видео:",
-                reply_markup=video_menu(text)
-            )
+        )
+
+
+    elif mode == "video":
+
+        await update.message.reply_text(
+
+            "🎬 Выбери сервис:",
+
+            reply_markup=video_menu(text)
+
+        )
 
 
     else:
 
         await update.message.reply_text(
+
             "🔎 Результаты:",
+
             reply_markup=other_menu(
                 text,
                 mode
             )
+
         )
 
 
-
-
 # =====================
-# ERROR
+# ERROR HANDLER
 # =====================
 
 async def error_handler(update, context):
 
     print(
         "ERROR:",
-        context.error
+        repr(context.error)
     )
 
 
-
-
 # =====================
-# ЗАПУСК
+# RUN
 # =====================
 
 def run():
@@ -653,45 +524,76 @@ def run():
     if not BOT_TOKEN:
 
         raise RuntimeError(
-            "BOT_TOKEN не найден"
+            "BOT_TOKEN не найден в Environment Variables"
         )
 
 
     threading.Thread(
+
         target=run_flask,
+
         daemon=True
+
     ).start()
 
 
 
     application = (
+
         Application
         .builder()
         .token(BOT_TOKEN)
         .build()
+
     )
 
 
     application.add_handler(
+
         CommandHandler(
             "start",
             start
         )
+
     )
 
 
     application.add_handler(
+
+        CommandHandler(
+            "help",
+            help_command
+        )
+
+    )
+
+
+    application.add_handler(
+
+        CommandHandler(
+            "about",
+            about
+        )
+
+    )
+
+
+    application.add_handler(
+
         CallbackQueryHandler(
             buttons
         )
+
     )
 
 
     application.add_handler(
+
         MessageHandler(
             filters.TEXT & ~filters.COMMAND,
             message
         )
+
     )
 
 
@@ -705,9 +607,15 @@ def run():
     )
 
 
-    application.run_polling()
+    application.run_polling(
+        drop_pending_updates=True
+    )
 
 
+
+# =====================
+# MAIN
+# =====================
 
 if __name__ == "__main__":
 
