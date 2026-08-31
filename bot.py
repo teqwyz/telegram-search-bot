@@ -414,7 +414,7 @@ async def about_command(
     await update.message.reply_text(
 
         "Я поисковый Telegram-бот\n\n"
-        f"Создатель: {OWNER}\n"
+        f"Меня создал: {OWNER}\n"
         "Поддерживаются поиск, музыка, видео, "
         "Википедия, товары и карты."
 
@@ -440,8 +440,8 @@ async def set_mode(
 
     await update.message.reply_text(
 
-        f"✅ Режим «{title}» включён.\n\n"
-        "Теперь отправь поисковый запрос."
+        f" {title}? Без проблем.\n\n"
+        "Теперь отправляй поисковый запрос."
 
     )
 
