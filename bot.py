@@ -32,9 +32,9 @@ from database import (
 )
 
 
-# ============================================================
+# =====================
 # НАСТРОЙКИ
-# ============================================================
+# =====================
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
@@ -55,9 +55,9 @@ ADMIN_ID = int(
 )
 
 
-# ============================================================
+# =====================
 # FLASK / RENDER
-# ============================================================
+# =====================
 
 app = Flask(__name__)
 
@@ -76,42 +76,27 @@ def run_flask():
     )
 
 
-# ============================================================
+# =====================
 # ПАМЯТЬ РЕЖИМОВ
-# ============================================================
+# =====================
 
 modes = {}
 
 
-# ============================================================
+# =====================
 # URL
-# ============================================================
+# =====================
 
-def encode(text: str) -> str:
+def encode(text):
     return requests.utils.quote(
         text,
         safe=""
     )
 
 
-# ============================================================
-# НАЗВАНИЯ РЕЖИМОВ
-# ============================================================
-
-MODE_NAMES = {
-    "web": "🌐 Интернет",
-    "music": "🎵 Музыка",
-    "video": "🎬 Видео",
-    "wiki": "📚 Знания",
-    "shop": "🛒 Товары",
-    "maps": "🗺 Карты",
-    "news": "📰 Новости",
-}
-
-
-# ============================================================
+# =====================
 # ГЛАВНОЕ МЕНЮ
-# ============================================================
+# =====================
 
 def main_menu():
     return InlineKeyboardMarkup([
@@ -157,6 +142,12 @@ def main_menu():
                 callback_data="history"
             ),
         ],
+        [
+            InlineKeyboardButton(
+                "ℹ️ О боте",
+                callback_data="about"
+            ),
+        ],
     ])
 
 
@@ -171,11 +162,176 @@ def back_button():
     ])
 
 
-# ============================================================
-# ПОИСК — ИНТЕРНЕТ
-# ============================================================
+# =====================
+# START
+# =====================
 
-def web_search(text: str):
+async def start(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    if not update.message:
+        return
+
+    user = update.effective_user
+
+    add_user(user)
+
+    modes[user.id] = "web"
+
+    await update.message.reply_text(
+        "🤖 Добро пожаловать!\n\n"
+        "Я Smart Search Bot 2.3\n\n"
+        "Могу искать:\n\n"
+        "🌐 сайты\n"
+        "🎵 музыку\n"
+        "🎬 видео\n"
+        "📚 информацию\n"
+        "🛒 товары\n"
+        "🗺 места\n"
+        "📰 новости\n\n"
+        "Выбери категорию:",
+        reply_markup=main_menu(),
+    )
+
+
+# =====================
+# ABOUT
+# =====================
+
+async def about_command(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    if not update.message:
+        return
+
+    await update.message.reply_text(
+        "🤖 Smart Search Bot 2.3\n\n"
+        f"Создатель: {OWNER}\n\n"
+        "Возможности:\n\n"
+        "✅ SQLite база\n"
+        "✅ История поиска\n"
+        "✅ Inline Mode\n"
+        "✅ Новости\n"
+        "✅ Статистика\n"
+        "✅ Поиск по категориям\n"
+    )
+
+
+# =====================
+# HELP
+# =====================
+
+async def help_command(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    if not update.message:
+        return
+
+    await update.message.reply_text(
+        "📌 Команды бота:\n\n"
+        "/start — главное меню\n"
+        "/help — помощь\n"
+        "/about — информация о боте\n"
+        "/history — история поиска\n"
+        "/news — режим новостей\n"
+        "/admin — статистика администратора\n\n"
+        "Также можно использовать Inline Mode:\n"
+        "@имя_бота поисковый запрос"
+    )
+
+
+# =====================
+# ИСТОРИЯ
+# =====================
+
+async def history_command(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    if not update.message:
+        return
+
+    user_id = update.effective_user.id
+
+    items = get_history(user_id)
+
+    if not items:
+        await update.message.reply_text(
+            "⭐ История поиска пока пустая."
+        )
+        return
+
+    text = "⭐ История поиска:\n\n"
+
+    for i, item in enumerate(items, 1):
+        text += f"{i}. {item}\n"
+
+    await update.message.reply_text(
+        text,
+        reply_markup=back_button(),
+    )
+
+
+# =====================
+# NEWS
+# =====================
+
+async def news_command(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    if not update.message:
+        return
+
+    user_id = update.effective_user.id
+
+    modes[user_id] = "news"
+
+    await update.message.reply_text(
+        "📰 Режим новостей включён.\n\n"
+        "✏️ Напиши тему, которую хочешь найти."
+    )
+
+
+def news_menu(text):
+    q = encode(text)
+
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(
+                "📰 Google News",
+                url=f"https://news.google.com/search?q={q}"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "📰 Яндекс Новости",
+                url=f"https://yandex.ru/news/search?text={q}"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "🔎 Bing News",
+                url=f"https://www.bing.com/news/search?q={q}"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "⬅ Главное меню",
+                callback_data="menu"
+            )
+        ],
+    ])
+
+
+# =====================
+# ПОИСКОВЫЕ МЕНЮ
+# =====================
+
+def web_menu(text):
     q = encode(text)
 
     return InlineKeyboardMarkup([
@@ -212,11 +368,7 @@ def web_search(text: str):
     ])
 
 
-# ============================================================
-# МУЗЫКА
-# ============================================================
-
-def music_menu(text: str):
+def music_menu(text):
     q = encode(text)
 
     return InlineKeyboardMarkup([
@@ -253,11 +405,7 @@ def music_menu(text: str):
     ])
 
 
-# ============================================================
-# ВИДЕО
-# ============================================================
-
-def video_menu(text: str):
+def video_menu(text):
     q = encode(text)
 
     return InlineKeyboardMarkup([
@@ -294,11 +442,7 @@ def video_menu(text: str):
     ])
 
 
-# ============================================================
-# WIKI / SHOP / MAPS
-# ============================================================
-
-def other_menu(text: str, mode: str):
+def other_menu(text, mode):
     q = encode(text)
 
     links = {
@@ -364,266 +508,9 @@ def other_menu(text: str, mode: str):
     return InlineKeyboardMarkup(buttons)
 
 
-# ============================================================
-# НОВОСТИ
-# ============================================================
-
-def news_menu(text: str):
-    q = encode(text)
-
-    return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton(
-                "📰 Google News",
-                url=f"https://news.google.com/search?q={q}"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                "📰 Яндекс Новости",
-                url=f"https://yandex.ru/news/search?text={q}"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                "🔎 Bing News",
-                url=f"https://www.bing.com/news/search?q={q}"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                "⬅ Главное меню",
-                callback_data="menu"
-            )
-        ],
-    ])
-
-
-# ============================================================
-# START
-# ============================================================
-
-async def start(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-    if not update.message:
-        return
-
-    user = update.effective_user
-
-    add_user(user)
-
-    modes[user.id] = "web"
-
-    await update.message.reply_text(
-        "🤖 Добро пожаловать!\n\n"
-        "Я Smart Search Bot 2.3\n\n"
-        "Могу искать:\n\n"
-        "🌐 сайты\n"
-        "🎵 музыку\n"
-        "🎬 видео\n"
-        "📚 информацию\n"
-        "🛒 товары\n"
-        "🗺 места\n"
-        "📰 новости\n\n"
-        "Выбери категорию:",
-        reply_markup=main_menu(),
-    )
-
-
-# ============================================================
-# ABOUT
-# ============================================================
-
-async def about_command(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-    if not update.message:
-        return
-
-    await update.message.reply_text(
-        "🤖 Smart Search Bot 2.3\n\n"
-        f"Создатель: {OWNER}\n\n"
-        "Возможности:\n\n"
-        "✅ SQLite база\n"
-        "✅ История поиска\n"
-        "✅ Inline режим\n"
-        "✅ Новости\n"
-        "✅ Админ статистика\n"
-        "✅ Поиск по категориям\n\n"
-        "Версия: 2.3"
-    )
-
-
-# ============================================================
-# HELP
-# ============================================================
-
-async def help_command(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-    if not update.message:
-        return
-
-    await update.message.reply_text(
-        "📌 Команды:\n\n"
-        "/start — главное меню\n"
-        "/help — помощь\n"
-        "/about — информация\n"
-        "/history — история поиска\n"
-        "/news — новости\n\n"
-        "Режимы:\n"
-        "/music — музыка\n"
-        "/video — видео\n"
-        "/wiki — знания\n"
-        "/shop — товары\n"
-        "/maps — карты\n\n"
-        "👑 /admin — статистика администратора\n\n"
-        "Также можно использовать бота прямо в других чатах "
-        "через Inline Mode."
-    )
-
-
-# ============================================================
-# ИСТОРИЯ
-# ============================================================
-
-async def history_command(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-    if not update.message:
-        return
-
-    user_id = update.effective_user.id
-
-    items = get_history(user_id)
-
-    if not items:
-        await update.message.reply_text(
-            "⭐ История поиска пустая."
-        )
-        return
-
-    text = "⭐ История поиска:\n\n"
-
-    for i, item in enumerate(items, 1):
-        text += f"{i}. {item}\n"
-
-    await update.message.reply_text(
-        text,
-        reply_markup=back_button()
-    )
-
-
-# ============================================================
-# NEWS COMMAND
-# ============================================================
-
-async def news_command(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-    if not update.message:
-        return
-
-    user_id = update.effective_user.id
-
-    add_user(update.effective_user)
-
-    modes[user_id] = "news"
-
-    await update.message.reply_text(
-        "📰 Режим новостей включён.\n\n"
-        "✏️ Напиши тему, которую хочешь найти."
-    )
-
-
-# ============================================================
-# УСТАНОВКА РЕЖИМА
-# ============================================================
-
-async def set_mode(
-    update: Update,
-    mode: str,
-    text: str
-):
-    if not update.message:
-        return
-
-    user = update.effective_user
-
-    add_user(user)
-
-    modes[user.id] = mode
-
-    await update.message.reply_text(
-        f"{text}\n\n"
-        "✏️ Отправь запрос."
-    )
-
-
-async def music_command(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-    await set_mode(
-        update,
-        "music",
-        "🎵 Режим музыки включён"
-    )
-
-
-async def video_command(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-    await set_mode(
-        update,
-        "video",
-        "🎬 Режим видео включён"
-    )
-
-
-async def wiki_command(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-    await set_mode(
-        update,
-        "wiki",
-        "📚 Режим знаний включён"
-    )
-
-
-async def shop_command(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-    await set_mode(
-        update,
-        "shop",
-        "🛒 Режим товаров включён"
-    )
-
-
-async def maps_command(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-    await set_mode(
-        update,
-        "maps",
-        "🗺 Режим карт включён"
-    )
-
-
-# ============================================================
+# =====================
 # CALLBACK BUTTONS
-# ============================================================
+# =====================
 
 async def buttons(
     update: Update,
@@ -639,34 +526,27 @@ async def buttons(
     user_id = query.from_user.id
     data = query.data
 
-    # --------------------------------------------------------
-    # ГЛАВНОЕ МЕНЮ
-    # --------------------------------------------------------
-
+    # Главное меню
     if data == "menu":
         modes[user_id] = "web"
 
         await query.edit_message_text(
             "🤖 Главное меню\n\n"
-            "Выбери категорию:",
-            reply_markup=main_menu()
+            "Выбери способ поиска:",
+            reply_markup=main_menu(),
         )
 
         return
 
-    # --------------------------------------------------------
-    # ИСТОРИЯ
-    # --------------------------------------------------------
-
+    # История
     if data == "history":
         items = get_history(user_id)
 
         if not items:
             await query.edit_message_text(
                 "⭐ История поиска пустая.",
-                reply_markup=back_button()
+                reply_markup=back_button(),
             )
-
             return
 
         text = "⭐ История поиска:\n\n"
@@ -676,31 +556,53 @@ async def buttons(
 
         await query.edit_message_text(
             text,
-            reply_markup=back_button()
+            reply_markup=back_button(),
         )
 
         return
 
-    # --------------------------------------------------------
-    # ВЫБОР РЕЖИМА
-    # --------------------------------------------------------
-
-    if data in MODE_NAMES:
-        modes[user_id] = data
-
+    # О боте
+    if data == "about":
         await query.edit_message_text(
-            "✅ Режим выбран:\n\n"
-            f"{MODE_NAMES[data]}\n\n"
-            "✏️ Напиши запрос.",
-            reply_markup=main_menu()
+            "🤖 Smart Search Bot 2.3\n\n"
+            f"Создатель: {OWNER}\n\n"
+            "Функции:\n"
+            "✅ SQLite\n"
+            "✅ История\n"
+            "✅ Inline Mode\n"
+            "✅ Новости\n"
+            "✅ Статистика",
+            reply_markup=back_button(),
         )
 
         return
 
+    names = {
+        "web": "🌐 Интернет",
+        "music": "🎵 Музыка",
+        "video": "🎬 Видео",
+        "wiki": "📚 Знания",
+        "shop": "🛒 Товары",
+        "maps": "🗺 Карты",
+        "news": "📰 Новости",
+    }
 
-# ============================================================
+    if data not in names:
+        return
+
+    modes[user_id] = data
+
+    await query.edit_message_text(
+        "✅ Выбран режим:\n\n"
+        f"{names[data]}\n\n"
+        "✏️ Напиши запрос.",
+        reply_markup=main_menu(),
+    )
+
+
+# =====================
 # ОБРАБОТКА ТЕКСТА
-# ============================================================
+# =====================
 
 async def message(
     update: Update,
@@ -717,178 +619,151 @@ async def message(
     user = update.effective_user
     user_id = user.id
 
-    # Добавляем пользователя
     add_user(user)
+    add_history(user_id, text)
 
-    # Сохраняем запрос
-    add_history(
-        user_id,
-        text
-    )
-
-    # Текущий режим
     mode = modes.get(
         user_id,
         "web"
     )
 
-    # --------------------------------------------------------
-    # НОВОСТИ
-    # --------------------------------------------------------
-
+    # Новости
     if mode == "news":
         await update.message.reply_text(
             "📰 Новости:",
-            reply_markup=news_menu(text)
+            reply_markup=news_menu(text),
         )
-
         return
 
-    # --------------------------------------------------------
-    # ИНТЕРНЕТ
-    # --------------------------------------------------------
-
+    # Интернет
     if mode == "web":
         await update.message.reply_text(
             "🌐 Поиск:",
-            reply_markup=web_search(text)
+            reply_markup=web_menu(text),
         )
-
         return
 
-    # --------------------------------------------------------
-    # МУЗЫКА
-    # --------------------------------------------------------
-
+    # Музыка
     if mode == "music":
         await update.message.reply_text(
             "🎵 Музыка:",
-            reply_markup=music_menu(text)
+            reply_markup=music_menu(text),
         )
-
         return
 
-    # --------------------------------------------------------
-    # ВИДЕО
-    # --------------------------------------------------------
-
+    # Видео
     if mode == "video":
         await update.message.reply_text(
             "🎬 Видео:",
-            reply_markup=video_menu(text)
+            reply_markup=video_menu(text),
         )
-
         return
 
-    # --------------------------------------------------------
-    # WIKI / SHOP / MAPS
-    # --------------------------------------------------------
-
+    # Wiki / Shop / Maps
     await update.message.reply_text(
-        f"{MODE_NAMES.get(mode, '🔎 Поиск')}:",
+        "🔎 Результаты:",
         reply_markup=other_menu(
             text,
             mode
-        )
+        ),
     )
 
 
-# ============================================================
+# =====================
 # INLINE MODE
-# ============================================================
+# =====================
 
 async def inline_search(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
-    inline_query = update.inline_query
-
-    if not inline_query:
-        return
-
-    query = inline_query.query.strip()
+    query = update.inline_query.query.strip()
 
     if not query:
         return
 
-    user = inline_query.from_user
-
-    # Пользователь сохраняется в SQLite
-    add_user(user)
-
-    # Записываем Inline-запрос
-    add_history(
-        user.id,
-        query
-    )
-
     q = encode(query)
 
-    google_url = (
-        f"https://www.google.com/search?q={q}"
-    )
-
-    news_url = (
-        f"https://news.google.com/search?q={q}"
-    )
-
-    yandex_url = (
-        f"https://yandex.ru/search/?text={q}"
-    )
-
-    youtube_url = (
-        f"https://www.youtube.com/results?search_query={q}"
-    )
-
     results = [
-
         InlineQueryResultArticle(
             id="google",
             title="🔎 Google",
-            description=f"Искать «{query}» в Google",
+            description=f"Поиск: {query}",
             input_message_content=InputTextMessageContent(
-                f"🔎 Google:\n{google_url}"
+                f"https://www.google.com/search?q={q}"
             ),
+            reply_markup=InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton(
+                        "🔎 Открыть Google",
+                        url=f"https://www.google.com/search?q={q}"
+                    )
+                ]
+            ]),
         ),
 
         InlineQueryResultArticle(
             id="yandex",
             title="🔎 Яндекс",
-            description=f"Искать «{query}» в Яндексе",
+            description=f"Поиск: {query}",
             input_message_content=InputTextMessageContent(
-                f"🔎 Яндекс:\n{yandex_url}"
+                f"https://yandex.ru/search/?text={q}"
             ),
+            reply_markup=InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton(
+                        "🔎 Открыть Яндекс",
+                        url=f"https://yandex.ru/search/?text={q}"
+                    )
+                ]
+            ]),
         ),
 
         InlineQueryResultArticle(
-            id="youtube",
-            title="▶ YouTube",
-            description=f"Найти «{query}» на YouTube",
+            id="bing",
+            title="🔎 Bing",
+            description=f"Поиск: {query}",
             input_message_content=InputTextMessageContent(
-                f"▶ YouTube:\n{youtube_url}"
+                f"https://www.bing.com/search?q={q}"
             ),
+            reply_markup=InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton(
+                        "🔎 Открыть Bing",
+                        url=f"https://www.bing.com/search?q={q}"
+                    )
+                ]
+            ]),
         ),
 
         InlineQueryResultArticle(
             id="news",
             title="📰 Новости",
-            description=f"Найти новости по теме «{query}»",
+            description=f"Новости по теме: {query}",
             input_message_content=InputTextMessageContent(
-                f"📰 Новости:\n{news_url}"
+                f"https://news.google.com/search?q={q}"
             ),
+            reply_markup=InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton(
+                        "📰 Открыть новости",
+                        url=f"https://news.google.com/search?q={q}"
+                    )
+                ]
+            ]),
         ),
     ]
 
-    await inline_query.answer(
+    await update.inline_query.answer(
         results,
         cache_time=1,
-        is_personal=True
+        is_personal=True,
     )
 
 
-# ============================================================
+# =====================
 # ADMIN
-# ============================================================
+# =====================
 
 async def admin_command(
     update: Update,
@@ -899,12 +774,10 @@ async def admin_command(
 
     user_id = update.effective_user.id
 
-    # Проверка администратора
     if user_id != ADMIN_ID:
         await update.message.reply_text(
-            "⛔ У вас нет доступа к админ-панели."
+            "⛔ Нет доступа."
         )
-
         return
 
     users_count = count_users()
@@ -913,14 +786,14 @@ async def admin_command(
     await update.message.reply_text(
         "👑 Админ статистика\n\n"
         f"👤 Пользователей: {users_count}\n"
-        f"🔎 Поисковых запросов: {searches_count}\n\n"
+        f"🔎 Поисков: {searches_count}\n\n"
         "🤖 Smart Search Bot 2.3"
     )
 
 
-# ============================================================
+# =====================
 # ERROR
-# ============================================================
+# =====================
 
 async def error_handler(
     update,
@@ -932,9 +805,9 @@ async def error_handler(
     )
 
 
-# ============================================================
+# =====================
 # ЗАПУСК
-# ============================================================
+# =====================
 
 def run():
 
@@ -943,16 +816,16 @@ def run():
             "BOT_TOKEN отсутствует в Environment Variables"
         )
 
-    # Создаём SQLite
+    # SQLite
     init_db()
 
-    # Flask для Render
+    # Flask / Render
     threading.Thread(
         target=run_flask,
         daemon=True
     ).start()
 
-    # Telegram Application
+    # Telegram
     application = (
         Application
         .builder()
@@ -960,9 +833,9 @@ def run():
         .build()
     )
 
-    # ========================================================
+    # =====================
     # КОМАНДЫ
-    # ========================================================
+    # =====================
 
     application.add_handler(
         CommandHandler(
@@ -1001,49 +874,14 @@ def run():
 
     application.add_handler(
         CommandHandler(
-            "music",
-            music_command
-        )
-    )
-
-    application.add_handler(
-        CommandHandler(
-            "video",
-            video_command
-        )
-    )
-
-    application.add_handler(
-        CommandHandler(
-            "wiki",
-            wiki_command
-        )
-    )
-
-    application.add_handler(
-        CommandHandler(
-            "shop",
-            shop_command
-        )
-    )
-
-    application.add_handler(
-        CommandHandler(
-            "maps",
-            maps_command
-        )
-    )
-
-    application.add_handler(
-        CommandHandler(
             "admin",
             admin_command
         )
     )
 
-    # ========================================================
-    # CALLBACK BUTTONS
-    # ========================================================
+    # =====================
+    # CALLBACK
+    # =====================
 
     application.add_handler(
         CallbackQueryHandler(
@@ -1051,9 +889,9 @@ def run():
         )
     )
 
-    # ========================================================
-    # INLINE MODE
-    # ========================================================
+    # =====================
+    # INLINE
+    # =====================
 
     application.add_handler(
         InlineQueryHandler(
@@ -1061,9 +899,9 @@ def run():
         )
     )
 
-    # ========================================================
+    # =====================
     # TEXT
-    # ========================================================
+    # =====================
 
     application.add_handler(
         MessageHandler(
@@ -1072,9 +910,9 @@ def run():
         )
     )
 
-    # ========================================================
-    # ERRORS
-    # ========================================================
+    # =====================
+    # ERROR
+    # =====================
 
     application.add_error_handler(
         error_handler
@@ -1084,18 +922,14 @@ def run():
         "✅ Smart Search Bot 2.3 STARTED"
     )
 
-    # ========================================================
-    # POLLING
-    # ========================================================
-
     application.run_polling(
         drop_pending_updates=True
     )
 
 
-# ============================================================
+# =====================
 # MAIN
-# ============================================================
+# =====================
 
 if __name__ == "__main__":
     run()
