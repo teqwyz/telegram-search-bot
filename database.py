@@ -2,117 +2,101 @@ import sqlite3
 from datetime import datetime
 
 
-DATABASE = "bot.db"
-
+DB_NAME = "bot.db"
 
 
 # =====================
-# CONNECTION
+# ПОДКЛЮЧЕНИЕ
 # =====================
 
 def connect():
 
     return sqlite3.connect(
-        DATABASE
+        DB_NAME
     )
 
 
 
-
-
 # =====================
-# INIT DATABASE
+# СОЗДАНИЕ БАЗЫ
 # =====================
 
 def init_db():
 
-    conn = connect()
-
-    cursor = conn.cursor()
-
+    db = connect()
+    cursor = db.cursor()
 
 
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS users(
+    # пользователи
 
-            user_id INTEGER PRIMARY KEY,
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS users (
 
-            username TEXT,
+        id INTEGER PRIMARY KEY,
 
-            created TEXT
+        username TEXT,
 
-        )
-        """
+        first_name TEXT,
+
+        last_name TEXT,
+
+        created TIMESTAMP
+
     )
+    """)
 
 
 
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS history(
+    # история поиска
 
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS history (
 
-            user_id INTEGER,
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
 
-            query TEXT,
+        user_id INTEGER,
 
-            created TEXT
+        query TEXT,
 
-        )
-        """
+        created TIMESTAMP
+
     )
+    """)
 
 
 
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS stats(
+    db.commit()
 
-            name TEXT PRIMARY KEY,
-
-            value INTEGER DEFAULT 0
-
-        )
-        """
-    )
-
-
-
-    conn.commit()
-
-    conn.close()
+    db.close()
 
 
 
 
 
 # =====================
-# USERS
+# ДОБАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯ
 # =====================
 
 def add_user(user):
 
-    conn = connect()
+    db = connect()
 
-    cursor = conn.cursor()
-
+    cursor = db.cursor()
 
 
     cursor.execute(
-
         """
         INSERT OR IGNORE INTO users
 
         (
-            user_id,
+            id,
             username,
+            first_name,
+            last_name,
             created
         )
 
-        VALUES(?,?,?)
-
+        VALUES (?,?,?,?,?)
         """,
 
         (
@@ -121,51 +105,29 @@ def add_user(user):
 
             user.username,
 
-            str(datetime.now())
+            user.first_name,
+
+            user.last_name,
+
+            datetime.now()
 
         )
 
     )
 
 
+    db.commit()
 
-    conn.commit()
-
-    conn.close()
-
+    db.close()
 
 
-
-
-def count_users():
-
-    conn = connect()
-
-    cursor = conn.cursor()
-
-
-
-    cursor.execute(
-
-        "SELECT COUNT(*) FROM users"
-
-    )
-
-
-    result = cursor.fetchone()[0]
-
-
-    conn.close()
-
-
-    return result
 
 
 
 
 
 # =====================
-# HISTORY
+# СОХРАНЕНИЕ ПОИСКА
 # =====================
 
 def add_history(
@@ -173,29 +135,23 @@ def add_history(
     query
 ):
 
-    conn = connect()
+    db = connect()
 
-    cursor = conn.cursor()
+    cursor = db.cursor()
 
 
 
     cursor.execute(
-
         """
-
         INSERT INTO history
 
         (
-
             user_id,
-
             query,
-
             created
-
         )
 
-        VALUES(?,?,?)
+        VALUES (?,?,?)
 
         """,
 
@@ -205,36 +161,40 @@ def add_history(
 
             query,
 
-            str(datetime.now())
+            datetime.now()
 
         )
 
     )
 
 
+    db.commit()
 
-    conn.commit()
-
-    conn.close()
-
+    db.close()
 
 
 
+
+
+
+
+# =====================
+# ПОЛУЧЕНИЕ ИСТОРИИ
+# =====================
 
 def get_history(
-    user_id
+    user_id,
+    limit=10
 ):
 
-    conn = connect()
+    db = connect()
 
-    cursor = conn.cursor()
+    cursor = db.cursor()
 
 
 
     cursor.execute(
-
         """
-
         SELECT query
 
         FROM history
@@ -243,7 +203,7 @@ def get_history(
 
         ORDER BY id DESC
 
-        LIMIT 20
+        LIMIT ?
 
         """,
 
@@ -251,25 +211,27 @@ def get_history(
 
             user_id,
 
+            limit
+
         )
 
     )
 
 
 
-    data = cursor.fetchall()
+    rows = cursor.fetchall()
 
 
 
-    conn.close()
+    db.close()
 
 
 
     return [
 
-        item[0]
+        row[0]
 
-        for item in data
+        for row in rows
 
     ]
 
@@ -277,26 +239,68 @@ def get_history(
 
 
 
-def count_searches():
 
-    conn = connect()
 
-    cursor = conn.cursor()
+
+
+# =====================
+# СТАТИСТИКА
+# =====================
+
+def count_users():
+
+    db = connect()
+
+    cursor = db.cursor()
 
 
 
     cursor.execute(
+        """
+        SELECT COUNT(*)
 
-        "SELECT COUNT(*) FROM history"
+        FROM users
 
+        """
     )
-
 
 
     result = cursor.fetchone()[0]
 
 
-    conn.close()
+    db.close()
+
+
+    return result
+
+
+
+
+
+
+
+def count_searches():
+
+    db = connect()
+
+    cursor = db.cursor()
+
+
+
+    cursor.execute(
+        """
+        SELECT COUNT(*)
+
+        FROM history
+
+        """
+    )
+
+
+    result = cursor.fetchone()[0]
+
+
+    db.close()
 
 
     return result
